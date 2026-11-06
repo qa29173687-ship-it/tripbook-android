@@ -5,7 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -25,6 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         setContent {
             TripBookTheme {
                 Surface(color = Cream) {
@@ -52,6 +56,7 @@ fun AppNav(vm: TripViewModel) {
 
     Scaffold(
         containerColor = Cream,
+        contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             if (showBottom) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
@@ -79,7 +84,7 @@ fun AppNav(vm: TripViewModel) {
             }
         }
     ) { pad ->
-        NavHost(nav, startDestination = Tab.Trips.route, Modifier.padding(pad)) {
+        NavHost(nav, startDestination = Tab.Trips.route, Modifier.padding(pad).imePadding()) {
             composable(Tab.Trips.route) {
                 HomeScreen(
                     vm = vm,

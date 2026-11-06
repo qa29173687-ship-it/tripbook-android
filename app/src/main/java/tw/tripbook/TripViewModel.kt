@@ -35,6 +35,9 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun addMember(tripId: Long, name: String) = viewModelScope.launch { repo.addMember(tripId, name) }
+    fun deleteMember(memberId: Long, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        onResult(repo.tryDeleteMember(memberId))
+    }
 
     fun setMemberCash(memberId: Long, amount: Long, note: String = "手動調整") =
         viewModelScope.launch { repo.setMemberCashDirect(memberId, amount, note) }

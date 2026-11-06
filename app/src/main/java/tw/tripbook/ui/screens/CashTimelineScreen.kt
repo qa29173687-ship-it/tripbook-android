@@ -1,6 +1,8 @@
 package tw.tripbook.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,14 +43,13 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
     var entries by remember { mutableStateOf<List<CashTimelineEntry>>(emptyList()) }
     var showAdd by remember { mutableStateOf(false) }
 
-    // refresh timeline when cash changes
-    val memFlow = if (!isPool && memberId != null) vm.members(tripId) else null
     LaunchedEffect(trip?.poolCashCents, mems, memberId) {
         entries = vm.timeline(tripId, memberId)
     }
 
     Scaffold(
         containerColor = Cream,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Black) },
@@ -118,6 +119,8 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CashMovementDialog(
     isPool: Boolean,
@@ -130,37 +133,48 @@ private fun CashMovementDialog(
     var note by remember { mutableStateOf("") }
     val kindsIn = listOf(CashKind.ATM, CashKind.EXCHANGE, CashKind.OTHER)
     val kindsOut = listOf(CashKind.TOP_UP, CashKind.PERSONAL, CashKind.OTHER)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text(if (isPool) "公款收入／扣錢" else "現金收入／扣錢") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pill("收入／補錢", direction == CashDirection.IN) {
-                        direction = CashDirection.IN; kind = CashKind.ATM
-                    }
-                    Pill("支出／扣錢", direction == CashDirection.OUT, mint = false) {
-                        direction = CashDirection.OUT; kind = CashKind.TOP_UP
-                    }
+        sheetState = sheetState,
+        containerColor = Cream
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(if (isPool) "公款收入／扣錢" else "現金收入／扣錢", fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("收入／補錢", direction == CashDirection.IN) {
+                    direction = CashDirection.IN; kind = CashKind.ATM
                 }
-                Text("類型", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    (if (direction == CashDirection.IN) kindsIn else kindsOut).forEach { k ->
-                        Pill(k.label, kind == k, mint = direction == CashDirection.IN) { kind = k }
-                    }
+                Pill("支出／扣錢", direction == CashDirection.OUT, mint = false) {
+                    direction = CashDirection.OUT; kind = CashKind.TOP_UP
                 }
-                OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() } }, label = { Text("金額") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(note, { note = it }, label = { Text("備註（例如：儲值交通卡）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val a = amount.toLongOrNull() ?: return@TextButton
-                if (a <= 0) return@TextButton
-                onSave(direction, kind, a, note.ifBlank { kind.label })
-            }) { Text("儲存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
+            Text("類型", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (if (direction == CashDirection.IN) kindsIn else kindsOut).forEach { k ->
+                    Pill(k.label, kind == k, mint = direction == CashDirection.IN) { kind = k }
+                }
+            }
+            OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() } }, label = { Text("金額") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(note, { note = it }, label = { Text("備註（例如：儲值交通卡）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onDismiss, Modifier.weight(1f).height(48.dp)) { Text("取消") }
+                MintButton("儲存", Modifier.weight(1.2f)) {
+                    val a = amount.toLongOrNull() ?: return@MintButton
+                    if (a <= 0) return@MintButton
+                    onSave(direction, kind, a, note.ifBlank { kind.label })
+                }
+            }
+        }
+    }
 }

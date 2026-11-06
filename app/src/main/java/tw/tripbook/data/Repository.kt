@@ -39,6 +39,19 @@ class Repository(private val db: AppDatabase) {
     suspend fun updateTrip(trip: TripEntity) = trips.update(trip)
     suspend fun deleteTrip(id: Long) = trips.delete(id)
 
+    /** @return true if deleted; false if missing or still used in expenses. */
+    suspend fun tryDeleteMember(memberId: Long): Boolean {
+        val m = members.get(memberId) ?: return false
+        val mems = members.listForTrip(m.tripId)
+        if (mems.size <= 1) return false
+        val exps = expenses.listForTrip(m.tripId)
+        if (exps.any { it.payerMemberId == memberId }) return false
+        val splits = expenses.splitsForTrip(m.tripId)
+        if (splits.any { it.memberId == memberId }) return false
+        members.delete(memberId)
+        return true
+    }
+
     suspend fun addMember(tripId: Long, name: String, cashCents: Long = 0): Long {
         val count = members.listForTrip(tripId).size
         return members.insert(

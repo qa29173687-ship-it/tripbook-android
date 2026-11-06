@@ -79,16 +79,23 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
 
     Scaffold(
         containerColor = Cream,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = { Text("記一筆支出", fontWeight = FontWeight.Black) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.Close, null) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream),
+                windowInsets = WindowInsets.statusBars
             )
         }
     ) { pad ->
         Column(
-            Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+            Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             SoftCard {

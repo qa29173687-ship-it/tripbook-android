@@ -1,6 +1,5 @@
 package tw.tripbook.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,9 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tw.tripbook.TripViewModel
-import tw.tripbook.ui.components.MintButton
+import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.Cream
 import tw.tripbook.ui.theme.InkSoft
+import tw.tripbook.ui.theme.MintDeep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,31 +24,79 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
     var currency by remember { mutableStateOf("TWD") }
     var start by remember { mutableStateOf("") }
     var end by remember { mutableStateOf("") }
-    var members by remember { mutableStateOf("宏威, 小美, 阿明") }
+    var memberNames by remember { mutableStateOf(listOf("宏威")) }
+    var draftName by remember { mutableStateOf("") }
+    val scroll = rememberScrollState()
 
     Scaffold(
         containerColor = Cream,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = { Text("新增行程", fontWeight = FontWeight.Black) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream),
+                windowInsets = WindowInsets.statusBars
             )
         }
     ) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text("行程名稱") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(place, { place = it }, label = { Text("地點") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(currency, { currency = it.uppercase() }, label = { Text("幣別（ISO，預設 TWD）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(start, { start = it }, label = { Text("開始日期 yyyy-MM-dd") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(end, { end = it }, label = { Text("結束日期 yyyy-MM-dd") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(members, { members = it }, label = { Text("旅伴（逗號分隔，第一位是我）") }, modifier = Modifier.fillMaxWidth())
-            Text("之後可在旅伴頁調整現金與公款。", color = InkSoft, fontSize = MaterialTheme.typography.bodySmall.fontSize)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .imePadding()
+                .verticalScroll(scroll)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(
+                name, { name = it },
+                label = { Text("行程名稱") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                place, { place = it },
+                label = { Text("地點") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            CurrencyDropdown(currency, onChange = { currency = it })
+            DatePickerButton("開始日期", start, onPicked = { start = it })
+            DatePickerButton("結束日期", end, onPicked = {
+                end = it
+                // if end before start, keep but user can fix
+            })
+            Text("旅伴（一個一個新增，第一位是我）", fontWeight = FontWeight.Bold, color = InkSoft)
+            MemberChipList(
+                names = memberNames,
+                onRemove = { idx ->
+                    if (memberNames.size <= 1) return@MemberChipList
+                    memberNames = memberNames.toMutableList().also { it.removeAt(idx) }
+                },
+                meIndex = 0
+            )
+            AddMemberRow(
+                name = draftName,
+                onNameChange = { draftName = it },
+                onAdd = {
+                    val n = draftName.trim()
+                    if (n.isEmpty()) return@AddMemberRow
+                    if (memberNames.any { it.equals(n, ignoreCase = true) }) return@AddMemberRow
+                    memberNames = memberNames + n
+                    draftName = ""
+                }
+            )
+            Text("之後可在旅伴頁調整現金與公款。", color = InkSoft, style = MaterialTheme.typography.bodySmall)
             MintButton("建立行程", Modifier.fillMaxWidth()) {
-                val names = members.split(",", "，").map { it.trim() }.filter { it.isNotEmpty() }
-                if (name.isBlank() || names.isEmpty()) return@MintButton
-                vm.createTrip(name.trim(), place.trim(), currency.ifBlank { "TWD" }, start.trim(), end.trim(), names, onDone)
+                if (name.isBlank() || memberNames.isEmpty()) return@MintButton
+                if (start.isBlank() || end.isBlank()) return@MintButton
+                vm.createTrip(
+                    name.trim(), place.trim(), currency,
+                    start, end, memberNames, onDone
+                )
             }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

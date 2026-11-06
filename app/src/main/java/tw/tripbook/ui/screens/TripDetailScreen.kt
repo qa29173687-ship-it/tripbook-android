@@ -23,6 +23,7 @@ import tw.tripbook.TripViewModel
 import tw.tripbook.domain.*
 import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.*
+import tw.tripbook.util.Dates
 import tw.tripbook.util.Money
 import java.time.Instant
 import java.time.ZoneId
@@ -60,7 +61,7 @@ fun TripDetailScreen(
                 title = {
                     Column {
                         Text(trip?.name ?: "行程", fontWeight = FontWeight.Black)
-                        Text("${trip?.startDate.orEmpty()} – ${trip?.endDate.orEmpty()} · ${trip?.place.orEmpty()}", fontSize = 12.sp, color = InkSoft)
+                        Text("${Dates.toDisplay(trip?.startDate.orEmpty())} – ${Dates.toDisplay(trip?.endDate.orEmpty())} · ${trip?.place.orEmpty()}", fontSize = 12.sp, color = InkSoft)
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },

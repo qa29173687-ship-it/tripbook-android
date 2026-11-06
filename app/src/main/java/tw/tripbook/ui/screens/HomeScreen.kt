@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tw.tripbook.TripViewModel
 import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.*
+import tw.tripbook.util.Dates
 import tw.tripbook.util.Money
 
 @Composable
@@ -158,7 +159,7 @@ fun HomeScreen(
                                     fontSize = 12.sp, fontWeight = FontWeight.Bold
                                 )
                             }
-                            Text("${trip.startDate} – ${trip.endDate} · ${trip.place}", color = InkSoft, fontSize = 13.sp)
+                            Text("${Dates.toDisplay(trip.startDate)} – ${Dates.toDisplay(trip.endDate)} · ${trip.place}", color = InkSoft, fontSize = 13.sp)
                             Row {
                                 mems.take(5).forEach { MemberAvatar(it.name, it.colorIndex, 28) }
                             }
