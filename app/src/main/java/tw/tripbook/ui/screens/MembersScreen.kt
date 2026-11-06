@@ -2,7 +2,6 @@ package tw.tripbook.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,53 +30,41 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
     val trip by vm.trip(tripId).collectAsStateWithLifecycle(null)
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
     var newName by remember { mutableStateOf("") }
-    var editCashFor by remember { mutableStateOf<Long?>(null) }
-    var editPool by remember { mutableStateOf(false) }
+    var newCash by remember { mutableStateOf("") }
+    var editStartFor by remember { mutableStateOf<Long?>(null) }
     var cashInput by remember { mutableStateOf("") }
     val ctx = LocalContext.current
+    val snack = remember { SnackbarHostState() }
 
     Scaffold(
         containerColor = Cream,
         contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("旅伴與現金", fontWeight = FontWeight.Black)
-                        Text("每人身上現金可分開記", fontSize = 12.sp, color = InkSoft)
-                    }
-                },
+                title = { Text("旅伴與現金", fontWeight = FontWeight.Black) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream),
                 windowInsets = WindowInsets.statusBars
             )
         }
     ) { pad ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(pad)
-                .imePadding()
-        ) {
+        Column(Modifier.fillMaxSize().padding(pad).imePadding()) {
             LazyColumn(
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
+                Modifier.weight(1f).padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 12.dp)
             ) {
                 item {
-                    GradientHeader(Modifier.clickable { onCash(null) }) {
-                        Text("公款現金（大家一起的）", color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Bold)
-                        Text(Money.format(trip?.poolCashCents ?: 0, trip?.currency ?: "TWD"), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                        val holder = mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"
-                        Text("$holder 保管 · 點一下看流水或調整", color = Color.White.copy(alpha = 0.92f), fontSize = 13.sp)
+                    SoftCard {
+                        Text("公款初始現金", color = InkSoft, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(
+                            Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0, trip?.currency ?: "TWD"),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 28.sp,
+                            color = Ink
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = {
-                        cashInput = (trip?.poolCashCents ?: 0).toString()
-                        editPool = true
-                    }) { Text("修改公款金額／保管人", color = MintDeep, fontWeight = FontWeight.Bold) }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text("旅伴", fontWeight = FontWeight.Bold, color = InkSoft)
                     Spacer(Modifier.height(8.dp))
                 }
@@ -87,136 +73,76 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MemberAvatar(m.name, m.colorIndex, 48)
                             Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f).clickable { onCash(m.id) }) {
-                                Text(m.name + if (m.isMe) "（我）" else "", fontWeight = FontWeight.Black, fontSize = 17.sp)
-                                Text(if (m.id == trip?.poolHolderMemberId) "保管公款" else "旅伴", color = InkSoft, fontSize = 13.sp)
-                                Text("身上現金 ${Money.format(m.cashCents, trip?.currency ?: "TWD")}", color = PeachDeep, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
+                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    "修改現金",
-                                    Modifier
-                                        .clickable {
-                                            editCashFor = m.id
-                                            cashInput = m.cashCents.toString()
-                                        }
-                                        .clip(RoundedCornerShape(50))
-                                        .background(PeachSoft)
-                                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                                    color = PeachDeep,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    m.name + if (m.isMe) "（我）" else "",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 17.sp,
+                                    color = Ink,
+                                    maxLines = 1
                                 )
-                                if (!m.isMe) {
-                                    IconButton(onClick = {
-                                        vm.deleteMember(m.id) { ok ->
-                                            Toast.makeText(
-                                                ctx,
-                                                if (ok) "已刪除 ${m.name}" else "無法刪除（可能還有支出紀錄，或只剩一人）",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }) {
-                                        Icon(Icons.Default.Close, contentDescription = "刪除旅伴", tint = InkSoft)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "初始現金 ${Money.format(m.startingCashCents, trip?.currency ?: "TWD")}",
+                                    color = MintDeep,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            TextButton(onClick = {
+                                editStartFor = m.id
+                                cashInput = m.startingCashCents.toString()
+                            }) { Text("修改", color = PeachDeep, fontWeight = FontWeight.Bold) }
+                            if (!m.isMe) {
+                                IconButton(onClick = {
+                                    vm.deleteMember(m.id) { ok ->
+                                        Toast.makeText(
+                                            ctx,
+                                            if (ok) "已刪除" else "無法刪除（可能還有支出）",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
-                                }
+                                }) { Icon(Icons.Default.Close, null, tint = InkSoft) }
                             }
                         }
                     }
                 }
-                item {
-                    SoftCard {
-                        Text(
-                            "出國時可先輸入換到的現金。記支出選「現金」會自動扣除；儲值交通卡、自己花的用「現金流水」記，不會進入分帳。",
-                            color = InkSoft,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
-                        )
-                    }
-                }
             }
-            // Sticky add row above keyboard
             Column(
                 Modifier
                     .fillMaxWidth()
                     .background(Cream)
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("新增旅伴", fontWeight = FontWeight.Bold, color = InkSoft, fontSize = 13.sp)
-                Spacer(Modifier.height(6.dp))
-                AddMemberRow(
-                    name = newName,
-                    onNameChange = { newName = it },
-                    onAdd = {
-                        val n = newName.trim()
-                        if (n.isEmpty()) return@AddMemberRow
-                        vm.addMember(tripId, n)
-                        newName = ""
-                    }
-                )
+                VisibleTextField(newName, { newName = it }, "旅伴名字")
+                VisibleMoneyField(newCash, { newCash = it }, "他帶了多少現金（可留空）")
+                MintButton("新增", Modifier.fillMaxWidth()) {
+                    val n = newName.trim()
+                    if (n.isEmpty()) return@MintButton
+                    vm.addMember(tripId, n, newCash.toLongOrNull() ?: 0)
+                    newName = ""; newCash = ""
+                }
             }
         }
     }
 
-    editCashFor?.let { mid ->
+    editStartFor?.let { mid ->
         AlertDialog(
-            onDismissRequest = { editCashFor = null },
-            title = { Text("設定身上現金") },
+            onDismissRequest = { editStartFor = null },
+            title = { Text("修改初始現金") },
             text = {
-                OutlinedTextField(
-                    cashInput,
-                    { cashInput = it.filter { ch -> ch.isDigit() || ch == '-' } },
-                    label = { Text("金額") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                VisibleMoneyField(cashInput, { cashInput = it }, "初始現金")
             },
             confirmButton = {
                 TextButton(onClick = {
-                    cashInput.toLongOrNull()?.let { vm.setMemberCash(mid, it) }
-                    editCashFor = null
+                    cashInput.toLongOrNull()?.let { vm.setStartingCash(mid, it) }
+                    editStartFor = null
                 }) { Text("儲存") }
             },
-            dismissButton = { TextButton(onClick = { editCashFor = null }) { Text("取消") } }
-        )
-    }
-    if (editPool) {
-        var holder by remember { mutableStateOf(trip?.poolHolderMemberId) }
-        AlertDialog(
-            onDismissRequest = { editPool = false },
-            title = { Text("公款設定") },
-            text = {
-                Column(Modifier.imePadding()) {
-                    OutlinedTextField(
-                        cashInput,
-                        { cashInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("公款金額") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("保管人")
-                    mems.forEach { m ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { holder = m.id }
-                                .padding(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = holder == m.id, onClick = { holder = m.id })
-                            Text(m.name)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    cashInput.toLongOrNull()?.let { vm.setPool(tripId, it, holder) }
-                    editPool = false
-                }) { Text("儲存") }
-            },
-            dismissButton = { TextButton(onClick = { editPool = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { editStartFor = null }) { Text("取消") } }
         )
     }
 }

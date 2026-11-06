@@ -84,7 +84,7 @@ fun AppNav(vm: TripViewModel) {
             }
         }
     ) { pad ->
-        NavHost(nav, startDestination = Tab.Trips.route, Modifier.padding(pad).imePadding()) {
+        NavHost(nav, startDestination = Tab.Trips.route, Modifier.padding(pad)) {
             composable(Tab.Trips.route) {
                 HomeScreen(
                     vm = vm,

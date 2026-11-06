@@ -112,22 +112,20 @@ fun HomeScreen(
                     if (me != null) {
                         Spacer(Modifier.height(4.dp))
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(Color.White)
-                                .clickable { onCash(t.id, me.id) }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("💵", fontSize = 28.sp)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("${t.name} · 我的現金", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text(Money.format(me.cashCents, t.currency), fontSize = 22.sp, fontWeight = FontWeight.Black)
-                            }
-                            Text("修改", Modifier.clip(RoundedCornerShape(50)).background(MintSoft).padding(horizontal = 12.dp, vertical = 6.dp), color = MintDeep, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color.White)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("💵", fontSize = 28.sp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("${t.name} · 初始現金", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(Money.format(me.startingCashCents, t.currency), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Ink)
                         }
+                    }
                     }
                 }
             }

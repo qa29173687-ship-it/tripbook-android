@@ -23,14 +23,28 @@ class Repository(private val db: AppDatabase) {
     suspend fun createTrip(
         name: String, place: String, currency: String,
         startDate: String, endDate: String,
-        memberNames: List<String>, meIndex: Int = 0
+        drafts: List<MemberDraft>, meIndex: Int = 0,
+        poolStarting: Long = 0
     ): Long {
         val tripId = trips.insert(
-            TripEntity(name = name, place = place, currency = currency, startDate = startDate, endDate = endDate)
+            TripEntity(
+                name = name, place = place, currency = currency,
+                startDate = startDate, endDate = endDate,
+                poolCashCents = poolStarting,
+                poolStartingCashCents = poolStarting
+            )
         )
-        memberNames.forEachIndexed { i, n ->
+        drafts.forEachIndexed { i, d ->
+            val start = d.startingCash.coerceAtLeast(0)
             members.insert(
-                MemberEntity(tripId = tripId, name = n.trim(), isMe = i == meIndex, colorIndex = i % 6)
+                MemberEntity(
+                    tripId = tripId,
+                    name = d.name.trim(),
+                    cashCents = start,
+                    startingCashCents = start,
+                    isMe = i == meIndex,
+                    colorIndex = i % 6
+                )
             )
         }
         return tripId
@@ -52,11 +66,25 @@ class Repository(private val db: AppDatabase) {
         return true
     }
 
-    suspend fun addMember(tripId: Long, name: String, cashCents: Long = 0): Long {
+    suspend fun addMember(tripId: Long, name: String, startingCash: Long = 0): Long {
         val count = members.listForTrip(tripId).size
+        val start = startingCash.coerceAtLeast(0)
         return members.insert(
-            MemberEntity(tripId = tripId, name = name.trim(), cashCents = cashCents, colorIndex = count % 6)
+            MemberEntity(
+                tripId = tripId, name = name.trim(),
+                cashCents = start, startingCashCents = start,
+                colorIndex = count % 6
+            )
         )
+    }
+
+    /** Update brought/starting cash shown as 初始現金; also reset remaining if never spent relative to old start. */
+    suspend fun setStartingCash(memberId: Long, starting: Long) {
+        val m = members.get(memberId) ?: return
+        val s = starting.coerceAtLeast(0)
+        val spent = (m.startingCashCents - m.cashCents).coerceAtLeast(0)
+        val remaining = (s - spent).coerceAtLeast(0)
+        members.update(m.copy(startingCashCents = s, cashCents = remaining))
     }
 
     suspend fun setMemberCashDirect(memberId: Long, newCashCents: Long, note: String = "手動調整") {
@@ -283,14 +311,16 @@ class Repository(private val db: AppDatabase) {
         val tripId = createTrip(
             name = "東京三日遊", place = "日本東京", currency = "TWD",
             startDate = "2026-11-01", endDate = "2026-11-03",
-            memberNames = listOf("宏威", "小美", "阿明"), meIndex = 0
+            drafts = listOf(
+                MemberDraft("宏威", 8000),
+                MemberDraft("小美", 5000),
+                MemberDraft("阿明", 6000)
+            ),
+            meIndex = 0,
+            poolStarting = 3000
         )
         val mems = members.listForTrip(tripId)
         val hw = mems[0].id; val xm = mems[1].id; val am = mems[2].id
-        addCashMovement(tripId, hw, CashDirection.IN, CashKind.ATM, 8000, "出發前提款")
-        addCashMovement(tripId, xm, CashDirection.IN, CashKind.ATM, 5000, "出發前提款")
-        addCashMovement(tripId, am, CashDirection.IN, CashKind.ATM, 6000, "出發前提款")
-        addCashMovement(tripId, null, CashDirection.IN, CashKind.EXCHANGE, 3000, "機場換匯放入公款")
         val t = trips.get(tripId)!!
         trips.update(t.copy(poolHolderMemberId = hw))
 

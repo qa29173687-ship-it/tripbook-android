@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         TripEntity::class, MemberEntity::class, ExpenseEntity::class,
         ExpenseSplitEntity::class, CashMovementEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

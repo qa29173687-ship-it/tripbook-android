@@ -28,16 +28,24 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
 
     fun createTrip(
         name: String, place: String, currency: String,
-        start: String, end: String, memberNames: List<String>, onDone: (Long) -> Unit
+        start: String, end: String,
+        drafts: List<MemberDraft>,
+        poolStarting: Long = 0,
+        onDone: (Long) -> Unit
     ) = viewModelScope.launch {
-        val id = repo.createTrip(name, place, currency, start, end, memberNames)
+        val id = repo.createTrip(name, place, currency, start, end, drafts, poolStarting = poolStarting)
         onDone(id)
     }
 
-    fun addMember(tripId: Long, name: String) = viewModelScope.launch { repo.addMember(tripId, name) }
+    fun addMember(tripId: Long, name: String, startingCash: Long = 0) =
+        viewModelScope.launch { repo.addMember(tripId, name, startingCash) }
+
     fun deleteMember(memberId: Long, onResult: (Boolean) -> Unit = {}) = viewModelScope.launch {
         onResult(repo.tryDeleteMember(memberId))
     }
+
+    fun setStartingCash(memberId: Long, amount: Long) =
+        viewModelScope.launch { repo.setStartingCash(memberId, amount) }
 
     fun setMemberCash(memberId: Long, amount: Long, note: String = "手動調整") =
         viewModelScope.launch { repo.setMemberCashDirect(memberId, amount, note) }

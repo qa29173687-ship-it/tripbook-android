@@ -18,6 +18,9 @@ import tw.tripbook.ui.theme.Line
 import tw.tripbook.ui.theme.MintDeep
 import tw.tripbook.util.Currencies
 import tw.tripbook.util.Dates
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import tw.tripbook.ui.theme.Ink
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,7 +41,9 @@ fun CurrencyDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(),
-            singleLine = true
+            singleLine = true,
+            textStyle = TextStyle(color = Ink, fontSize = 18.sp),
+            colors = visibleFieldColors()
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Currencies.options.forEach { opt ->
@@ -148,12 +153,11 @@ fun AddMemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
+        VisibleTextField(
             value = name,
             onValueChange = onNameChange,
-            label = { Text("旅伴名字") },
-            modifier = Modifier.weight(1f),
-            singleLine = true
+            label = "旅伴名字",
+            modifier = Modifier.weight(1f)
         )
         MintButton(buttonLabel, Modifier.height(56.dp)) { onAdd() }
     }

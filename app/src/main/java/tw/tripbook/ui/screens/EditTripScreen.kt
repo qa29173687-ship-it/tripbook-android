@@ -1,22 +1,28 @@
 package tw.tripbook.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import tw.tripbook.TripViewModel
+import tw.tripbook.data.MemberDraft
 import tw.tripbook.ui.components.*
-import tw.tripbook.ui.theme.Cream
-import tw.tripbook.ui.theme.InkSoft
-import tw.tripbook.ui.theme.MintDeep
+import tw.tripbook.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
@@ -24,13 +30,24 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
     var currency by remember { mutableStateOf("TWD") }
     var start by remember { mutableStateOf("") }
     var end by remember { mutableStateOf("") }
-    var memberNames by remember { mutableStateOf(listOf("宏威")) }
+    var drafts by remember { mutableStateOf(listOf(MemberDraft("宏威", 0))) }
     var draftName by remember { mutableStateOf("") }
+    var draftCash by remember { mutableStateOf("") }
+    var myCash by remember { mutableStateOf("") }
+    var poolCash by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val snack = remember { SnackbarHostState() }
+
+    fun bring(req: BringIntoViewRequester) {
+        scope.launch { req.bringIntoView() }
+    }
 
     Scaffold(
         containerColor = Cream,
         contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
                 title = { Text("新增行程", fontWeight = FontWeight.Black) },
@@ -47,56 +64,113 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
                 .imePadding()
                 .verticalScroll(scroll)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            OutlinedTextField(
-                name, { name = it },
-                label = { Text("行程名稱") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+            val nameReq = remember { BringIntoViewRequester() }
+            VisibleTextField(
+                name, { name = it }, "行程名稱",
+                Modifier.bringIntoViewRequester(nameReq).onFocusEvent { if (it.isFocused) bring(nameReq) }
             )
-            OutlinedTextField(
-                place, { place = it },
-                label = { Text("地點") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+            val placeReq = remember { BringIntoViewRequester() }
+            VisibleTextField(
+                place, { place = it }, "地點",
+                Modifier.bringIntoViewRequester(placeReq).onFocusEvent { if (it.isFocused) bring(placeReq) }
             )
             CurrencyDropdown(currency, onChange = { currency = it })
             DatePickerButton("開始日期", start, onPicked = { start = it })
-            DatePickerButton("結束日期", end, onPicked = {
-                end = it
-                // if end before start, keep but user can fix
-            })
-            Text("旅伴（一個一個新增，第一位是我）", fontWeight = FontWeight.Bold, color = InkSoft)
-            MemberChipList(
-                names = memberNames,
-                onRemove = { idx ->
-                    if (memberNames.size <= 1) return@MemberChipList
-                    memberNames = memberNames.toMutableList().also { it.removeAt(idx) }
+            DatePickerButton("結束日期", end, onPicked = { end = it })
+
+            Text("我帶了多少現金", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+            val myCashReq = remember { BringIntoViewRequester() }
+            VisibleMoneyField(
+                myCash, {
+                    myCash = it
+                    // keep first member starting cash in sync
+                    if (drafts.isNotEmpty()) {
+                        drafts = drafts.toMutableList().also { list ->
+                            list[0] = list[0].copy(startingCash = it.toLongOrNull() ?: 0)
+                        }
+                    }
                 },
-                meIndex = 0
+                "初始現金（我）",
+                Modifier.bringIntoViewRequester(myCashReq).onFocusEvent { if (it.isFocused) bring(myCashReq) }
             )
-            AddMemberRow(
-                name = draftName,
-                onNameChange = { draftName = it },
-                onAdd = {
-                    val n = draftName.trim()
-                    if (n.isEmpty()) return@AddMemberRow
-                    if (memberNames.any { it.equals(n, ignoreCase = true) }) return@AddMemberRow
-                    memberNames = memberNames + n
-                    draftName = ""
+
+            VisibleMoneyField(poolCash, { poolCash = it }, "公款初始現金（可留空）")
+
+            Text("旅伴（一個一個新增，第一位是我）", fontWeight = FontWeight.Bold, color = InkSoft)
+            drafts.forEachIndexed { i, d ->
+                SoftCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemberAvatar(d.name, i, 36)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(d.name + if (i == 0) "（我）" else "", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
+                            Text("初始現金 ${d.startingCash}", color = MintDeep, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                        if (i > 0) {
+                            IconButton(onClick = {
+                                drafts = drafts.toMutableList().also { it.removeAt(i) }
+                            }) { Icon(Icons.Default.Close, null, tint = InkSoft) }
+                        }
+                    }
                 }
-            )
-            Text("之後可在旅伴頁調整現金與公款。", color = InkSoft, style = MaterialTheme.typography.bodySmall)
-            MintButton("建立行程", Modifier.fillMaxWidth()) {
-                if (name.isBlank() || memberNames.isEmpty()) return@MintButton
-                if (start.isBlank() || end.isBlank()) return@MintButton
-                vm.createTrip(
-                    name.trim(), place.trim(), currency,
-                    start, end, memberNames, onDone
-                )
             }
-            Spacer(Modifier.height(24.dp))
+
+            SoftCard {
+                Text("新增旅伴", fontWeight = FontWeight.Bold, color = Ink)
+                Spacer(Modifier.height(8.dp))
+                val addNameReq = remember { BringIntoViewRequester() }
+                VisibleTextField(
+                    draftName, { draftName = it }, "旅伴名字",
+                    Modifier.bringIntoViewRequester(addNameReq).onFocusEvent { if (it.isFocused) bring(addNameReq) }
+                )
+                Spacer(Modifier.height(8.dp))
+                val addCashReq = remember { BringIntoViewRequester() }
+                VisibleMoneyField(
+                    draftCash, { draftCash = it }, "他帶了多少現金（可留空）",
+                    Modifier.bringIntoViewRequester(addCashReq).onFocusEvent { if (it.isFocused) bring(addCashReq) }
+                )
+                Spacer(Modifier.height(10.dp))
+                MintButton("新增旅伴", Modifier.fillMaxWidth()) {
+                    val n = draftName.trim()
+                    if (n.isEmpty()) {
+                        error = "請輸入旅伴名字"
+                        return@MintButton
+                    }
+                    if (drafts.any { it.name.equals(n, true) }) {
+                        error = "已經有這位旅伴了"
+                        return@MintButton
+                    }
+                    drafts = drafts + MemberDraft(n, draftCash.toLongOrNull() ?: 0)
+                    draftName = ""; draftCash = ""
+                }
+            }
+
+            MintButton("建立行程", Modifier.fillMaxWidth()) {
+                when {
+                    name.isBlank() -> error = "請填行程名稱"
+                    start.isBlank() || end.isBlank() -> error = "請選擇開始與結束日期"
+                    drafts.isEmpty() -> error = "至少一位旅伴"
+                    else -> {
+                        val synced = drafts.toMutableList().also {
+                            if (it.isNotEmpty()) it[0] = it[0].copy(startingCash = myCash.toLongOrNull() ?: it[0].startingCash)
+                        }
+                        vm.createTrip(
+                            name.trim(), place.trim(), currency, start, end, synced,
+                            poolStarting = poolCash.toLongOrNull() ?: 0, onDone = onDone
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+
+    LaunchedEffect(error) {
+        error?.let {
+            snack.showSnackbar(it)
+            error = null
         }
     }
 }

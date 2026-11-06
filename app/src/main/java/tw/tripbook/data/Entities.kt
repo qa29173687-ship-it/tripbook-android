@@ -11,10 +11,11 @@ data class TripEntity(
     val name: String,
     val place: String = "",
     val currency: String = "TWD",
-    val startDate: String = "", // yyyy-MM-dd
+    val startDate: String = "",
     val endDate: String = "",
     val settled: Boolean = false,
     val poolCashCents: Long = 0,
+    val poolStartingCashCents: Long = 0,
     val poolHolderMemberId: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
@@ -31,7 +32,10 @@ data class MemberEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tripId: Long,
     val name: String,
+    /** Remaining cash (deducted when paying 現金 expenses). */
     val cashCents: Long = 0,
+    /** Brought / starting cash set when creating the trip — shown as 初始現金. */
+    val startingCashCents: Long = 0,
     val isMe: Boolean = false,
     val colorIndex: Int = 0
 )
@@ -49,9 +53,9 @@ data class ExpenseEntity(
     val tripId: Long,
     val title: String,
     val amountCents: Long,
-    val category: String, // ExpenseCategory.name
-    val payerMemberId: Long, // -1 = 公款
-    val paymentMethod: String, // PaymentMethod.name
+    val category: String,
+    val payerMemberId: Long,
+    val paymentMethod: String,
     val note: String = "",
     val receiptPath: String? = null,
     val occurredAt: Long = System.currentTimeMillis()
@@ -72,10 +76,6 @@ data class ExpenseSplitEntity(
     val shareCents: Long
 )
 
-/**
- * Personal or pool cash movements that are NOT shared trip expenses,
- * plus automatic rows when a CASH/POOL expense is saved/deleted.
- */
 @Entity(
     tableName = "cash_movements",
     foreignKeys = [ForeignKey(
@@ -87,12 +87,14 @@ data class ExpenseSplitEntity(
 data class CashMovementEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tripId: Long,
-    /** null = shared pool ledger */
     val memberId: Long?,
-    val direction: String, // IN / OUT
-    val kind: String, // CashKind.name
+    val direction: String,
+    val kind: String,
     val amountCents: Long,
     val note: String = "",
     val relatedExpenseId: Long? = null,
     val occurredAt: Long = System.currentTimeMillis()
 )
+
+/** Draft used when creating a trip. */
+data class MemberDraft(val name: String, val startingCash: Long = 0)

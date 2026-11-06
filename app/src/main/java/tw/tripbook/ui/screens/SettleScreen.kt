@@ -64,8 +64,8 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
         if (transfers.isEmpty()) appendLine("已結清，沒有需要轉的帳。")
         else transfers.forEach { appendLine("${nameOf(it.fromMemberId)} 轉給 ${nameOf(it.toMemberId)} ${Money.format(it.amountCents, trip?.currency ?: "TWD")}") }
         appendLine("—")
-        mems.forEach { appendLine("${it.name}身上現金尚餘 ${Money.format(it.cashCents, trip?.currency ?: "TWD")}") }
-        appendLine("公款現金 ${Money.format(trip?.poolCashCents ?: 0)}（${mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"}保管）可現場發還或折抵。")
+        mems.forEach { appendLine("${it.name}初始現金 ${Money.format(it.startingCashCents, trip?.currency ?: "TWD")}") }
+        appendLine("公款初始 ${Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0)}（${mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"}保管）可現場發還或折抵。")
     }
 
     Scaffold(
@@ -92,18 +92,18 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(12.dp))
                 SoftCard {
-                    Text("現金現況", fontWeight = FontWeight.Black)
+                    Text("初始現金", fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         mems.forEach { m ->
                             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Cream).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(m.name, fontSize = 11.sp, color = InkSoft, fontWeight = FontWeight.Bold)
-                                Text(Money.format(m.cashCents), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                                Text(m.name, fontSize = 11.sp, color = InkSoft, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(Money.format(m.startingCashCents), fontSize = 12.sp, fontWeight = FontWeight.Black)
                             }
                         }
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(MintSoft).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("公款", fontSize = 11.sp, color = MintDeep, fontWeight = FontWeight.Bold)
-                            Text(Money.format(trip?.poolCashCents ?: 0), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                            Text("公款初始", fontSize = 11.sp, color = MintDeep, fontWeight = FontWeight.Bold)
+                            Text(Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0), fontSize = 12.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 }

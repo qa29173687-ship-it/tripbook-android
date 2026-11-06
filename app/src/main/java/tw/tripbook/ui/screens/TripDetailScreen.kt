@@ -87,15 +87,25 @@ fun TripDetailScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SoftCard(Modifier.weight(1.2f).clickable { onCash(me?.id) }) {
-                        Text("💵 我的現金", color = InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(Money.format(me?.cashCents ?: 0, trip?.currency ?: "TWD"), fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        Text("點一下看流水 ›", color = PeachDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    SoftCard(Modifier.weight(1.2f)) {
+                        Text("💵 初始現金", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            Money.format(me?.startingCashCents ?: 0, trip?.currency ?: "TWD"),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp,
+                            color = Ink,
+                            maxLines = 1
+                        )
                     }
-                    SoftCard(Modifier.weight(1f).clickable { onCash(null) }) {
-                        Text("🧳 公款現金", color = InkSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(Money.format(trip?.poolCashCents ?: 0, trip?.currency ?: "TWD"), fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        Text(holder?.let { "${it.name}保管" } ?: "未指定", color = MintDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    SoftCard(Modifier.weight(1f)) {
+                        Text("🧳 公款初始", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0, trip?.currency ?: "TWD"),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp,
+                            color = Ink,
+                            maxLines = 1
+                        )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -111,13 +121,20 @@ fun TripDetailScreen(
                             MemberAvatar(m.name, m.colorIndex, 36)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(m.name, fontWeight = FontWeight.Bold)
-                                Text("身上現金 ${Money.format(m.cashCents, trip?.currency ?: "TWD")}", color = InkSoft, fontSize = 12.sp)
+                                Text(m.name, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1)
+                                Text(
+                                    "初始現金 ${Money.format(m.startingCashCents, trip?.currency ?: "TWD")}",
+                                    color = MintDeep,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
                             }
                             Text(
                                 if (b.netCents >= 0) "應收 ${Money.format(b.netCents)}" else "應付 ${Money.format(-b.netCents)}",
                                 color = if (b.netCents >= 0) MintDeep else PeachDeep,
-                                fontWeight = FontWeight.Black
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1
                             )
                         }
                     }

@@ -3,13 +3,15 @@ package tw.tripbook.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -17,12 +19,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import tw.tripbook.TripViewModel
 import tw.tripbook.domain.*
 import tw.tripbook.ui.components.*
@@ -31,20 +35,22 @@ import tw.tripbook.util.Money
 import java.io.File
 import java.io.FileOutputStream
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     val trip by vm.trip(tripId).collectAsStateWithLifecycle(null)
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
     var amountText by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(ExpenseCategory.FOOD) }
-    var payerId by remember { mutableStateOf(-2L) } // set when mems load
+    var payerId by remember { mutableStateOf(-2L) }
     var method by remember { mutableStateOf(PaymentMethod.CASH) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var receiptPath by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
+    val snack = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val scroll = rememberScrollState()
 
     LaunchedEffect(mems) {
         if (mems.isNotEmpty() && payerId < 0 && payerId != -1L) {
@@ -64,22 +70,15 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     }
 
     val amount = amountText.toLongOrNull() ?: 0L
-    val payer = mems.firstOrNull { it.id == payerId }
-    val poolPay = method == PaymentMethod.POOL || payerId == -1L
-    val cashHint = if (method == PaymentMethod.CASH && payer != null && amount > 0) {
-        val remain = payer.cashCents - amount
-        "將從 ${payer.name} 身上現金扣除 ${Money.format(amount)}，剩餘約 ${Money.format(remain)}（目前 ${Money.format(payer.cashCents)}）"
-    } else if (poolPay && amount > 0) {
-        val pool = trip?.poolCashCents ?: 0
-        "將從公款扣除 ${Money.format(amount)}，剩餘約 ${Money.format(pool - amount)}（目前 ${Money.format(pool)}）"
-    } else null
-
     val parts = selected.toList().sorted()
     val shares = if (parts.isNotEmpty() && amount > 0) SplitMath.equalSplit(amount, parts) else emptyList()
+
+    fun notify(msg: String) = scope.launch { snack.showSnackbar(msg) }
 
     Scaffold(
         containerColor = Cream,
         contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
                 title = { Text("記一筆支出", fontWeight = FontWeight.Black) },
@@ -94,13 +93,27 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(pad)
                 .imePadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             SoftCard {
-                OutlinedTextField(amountText, { amountText = it.filter { ch -> ch.isDigit() } }, label = { Text("金額") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(title, { title = it }, label = { Text("項目／備註") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                val amtReq = remember { BringIntoViewRequester() }
+                VisibleMoneyField(
+                    amountText, { amountText = it }, "金額",
+                    Modifier.bringIntoViewRequester(amtReq).onFocusEvent {
+                        if (it.isFocused) scope.launch { amtReq.bringIntoView() }
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+                val titleReq = remember { BringIntoViewRequester() }
+                VisibleTextField(
+                    title, { title = it }, "項目（可留空）",
+                    Modifier.bringIntoViewRequester(titleReq).onFocusEvent {
+                        if (it.isFocused) scope.launch { titleReq.bringIntoView() }
+                    },
+                    placeholder = "空白則用分類名稱"
+                )
             }
             Text("分類", fontWeight = FontWeight.Bold, color = InkSoft)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -121,7 +134,7 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         MemberAvatar(m.name, m.colorIndex, 40)
-                        Text(m.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(m.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Ink, maxLines = 1)
                     }
                 }
                 if ((trip?.poolCashCents ?: 0) > 0 || method == PaymentMethod.POOL) {
@@ -134,7 +147,7 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("🧳", fontSize = 28.sp)
-                        Text("公款", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("公款", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Ink)
                     }
                 }
             }
@@ -146,9 +159,6 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                     }
                 }
             }
-            cashHint?.let {
-                Text(it, Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PeachSoft).padding(12.dp), color = PeachDeep, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
             Text("誰要分攤（預設平均）", fontWeight = FontWeight.Bold, color = InkSoft)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 mems.forEach { m ->
@@ -158,15 +168,15 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                         Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
                             .background(Color.White)
                             .border(2.dp, if (on) Mint else Color.Transparent, RoundedCornerShape(16.dp))
-                            .clickable {
-                                selected = if (on) selected - m.id else selected + m.id
-                            }
+                            .clickable { selected = if (on) selected - m.id else selected + m.id }
                             .padding(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         MemberAvatar(m.name, m.colorIndex, 36)
-                        Text(m.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(if (on && share != null) Money.format(share) else "未分攤", color = InkSoft, fontSize = 11.sp)
+                        Text(m.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Ink, maxLines = 1)
+                        if (on && share != null) {
+                            Text(Money.format(share, trip?.currency ?: "TWD"), color = MintDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -175,12 +185,22 @@ fun AddExpenseScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                     Text(if (receiptPath != null) "已選收據" else "📷 收據")
                 }
                 MintButton("儲存這一筆", Modifier.weight(1.3f)) {
-                    if (amount <= 0 || parts.isEmpty() || title.isBlank()) return@MintButton
-                    val payMethod = if (payerId == -1L) PaymentMethod.POOL else method
-                    vm.addExpense(tripId, title, amount, category, payerId, payMethod, parts, note.ifBlank { title }, receiptPath) { onBack() }
+                    when {
+                        amount <= 0 -> notify("請輸入金額")
+                        parts.isEmpty() -> notify("請至少選一位分攤")
+                        payerId < -1 || (payerId == -2L) -> notify("請選擇付款人")
+                        else -> {
+                            val finalTitle = title.trim().ifBlank { category.label }
+                            val payMethod = if (payerId == -1L) PaymentMethod.POOL else method
+                            vm.addExpense(
+                                tripId, finalTitle, amount, category, payerId, payMethod,
+                                parts, finalTitle, receiptPath
+                            ) { onBack() }
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(40.dp))
         }
     }
 }
