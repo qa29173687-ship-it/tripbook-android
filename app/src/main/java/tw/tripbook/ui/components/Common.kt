@@ -116,16 +116,46 @@ fun MintButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit)
     ) { Text(text, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 }
 
+/** Stacked header — Column with spacing so lines never overlap. */
 @Composable
-fun GradientHeader(modifier: Modifier = Modifier, peach: Boolean = false, content: @Composable BoxScope.() -> Unit) {
+fun GradientHeader(
+    modifier: Modifier = Modifier,
+    peach: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit
+) {
     val brush = if (peach) Brush.linearGradient(listOf(Peach, PeachDeep))
     else Brush.linearGradient(listOf(Mint, MintDeep))
-    Box(
+    Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
             .background(brush)
-            .padding(20.dp),
+            .padding(horizontal = 20.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         content = content
+    )
+}
+
+@Composable
+fun CashSummaryBlock(
+    remaining: Long,
+    starting: Long,
+    currency: String,
+    remainingLabel: String = "剩餘現金",
+    startingLabel: String = "初始"
+) {
+    Text(remainingLabel, color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Text(
+        tw.tripbook.util.Money.format(remaining, currency),
+        fontWeight = FontWeight.Black,
+        fontSize = 22.sp,
+        color = Ink,
+        maxLines = 1
+    )
+    Text(
+        "$startingLabel ${tw.tripbook.util.Money.format(starting, currency)}",
+        color = InkSoft,
+        fontSize = 12.sp,
+        maxLines = 1
     )
 }

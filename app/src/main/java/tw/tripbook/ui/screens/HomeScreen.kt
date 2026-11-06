@@ -84,7 +84,7 @@ fun HomeScreen(
                     }
                     SoftCard(Modifier.weight(1f)) {
                         Text("目前行程已記", color = InkSoft, fontSize = 13.sp)
-                        Text(Money.format(monthSpend.value), fontSize = 22.sp, fontWeight = FontWeight.Black)
+                        Text(Money.format(monthSpend.value, trips.firstOrNull()?.currency ?: "TWD"), fontSize = 22.sp, fontWeight = FontWeight.Black)
                     }
                 }
                 meCash?.let { (tripId, cash) ->
@@ -122,8 +122,9 @@ fun HomeScreen(
                         Text("💵", fontSize = 28.sp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("${t.name} · 初始現金", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            Text(Money.format(me.startingCashCents, t.currency), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Ink)
+                            Text("${t.name} · 剩餘現金", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(Money.format(me.cashCents, t.currency), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Ink)
+                            Text("初始 ${Money.format(me.startingCashCents, t.currency)}", color = InkSoft, fontSize = 12.sp)
                         }
                     }
                     }

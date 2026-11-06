@@ -34,8 +34,10 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
     val member = mems.firstOrNull { it.id == memberId }
     val isPool = memberId == null
-    val title = if (isPool) "公款" else "${member?.name ?: ""}現金"
-    val balance = if (isPool) {
+    val currency = trip?.currency ?: "TWD"
+    val title = if (isPool) "公款現金" else "${member?.name ?: ""}現金"
+    val remaining = if (isPool) trip?.poolCashCents ?: 0 else member?.cashCents ?: 0
+    val starting = if (isPool) {
         trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0
     } else {
         member?.startingCashCents ?: 0
@@ -65,13 +67,9 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
         ) {
             item {
                 GradientHeader(peach = !isPool) {
-                    Text("初始現金", color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Bold)
-                    Text(
-                        Money.format(balance, trip?.currency ?: "TWD"),
-                        color = Color.White,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Black
-                    )
+                    Text("剩餘現金", color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Bold)
+                    Text(Money.format(remaining, currency), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
+                    Text("初始 ${Money.format(starting, currency)}", color = Color.White.copy(alpha = 0.92f), fontSize = 14.sp)
                 }
                 Spacer(Modifier.height(14.dp))
                 Text("現金分帳支出紀錄", fontWeight = FontWeight.Bold, color = InkSoft)
@@ -94,7 +92,7 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
                             Text(fmt.format(Instant.ofEpochMilli(e.occurredAt)), color = InkSoft, fontSize = 12.sp)
                         }
                         Text(
-                            "−" + Money.format(e.amountCents, trip?.currency ?: "TWD"),
+                            "−" + Money.format(e.amountCents, currency),
                             color = PeachDeep,
                             fontWeight = FontWeight.Black,
                             maxLines = 1

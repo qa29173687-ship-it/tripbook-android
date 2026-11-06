@@ -110,4 +110,34 @@ class LogicTest {
         assertEquals(600L, spent)
         assertEquals(9400L, remaining)
     }
+
+    @Test fun remainingAfterCashExpenseAndDelete() {
+        val starting = 100_000L
+        var remaining = starting
+        remaining = CashLedger.applyExpensePayment(remaining, 0, 3000, PaymentMethod.CASH).first
+        assertEquals(97_000L, remaining)
+        assertEquals(100_000L, starting)
+        remaining = CashLedger.reverseExpensePayment(remaining, 0, 3000, PaymentMethod.CASH).first
+        assertEquals(100_000L, remaining)
+    }
+
+    @Test fun companionsCashIndependent() {
+        var me = 100_000L
+        var friend = 50_000L
+        me = CashLedger.applyExpensePayment(me, 0, 3000, PaymentMethod.CASH).first
+        assertEquals(97_000L, me)
+        assertEquals(50_000L, friend)
+        friend = CashLedger.applyExpensePayment(friend, 0, 1200, PaymentMethod.CASH).first
+        assertEquals(97_000L, me)
+        assertEquals(48_800L, friend)
+    }
+
+    @Test fun cardDoesNotChangeRemaining() {
+        val starting = 100_000L
+        var remaining = starting
+        remaining = CashLedger.applyExpensePayment(remaining, 0, 3000, PaymentMethod.CARD).first
+        assertEquals(starting, remaining)
+        remaining = CashLedger.applyExpensePayment(remaining, 0, 3000, PaymentMethod.TRANSFER).first
+        assertEquals(starting, remaining)
+    }
 }

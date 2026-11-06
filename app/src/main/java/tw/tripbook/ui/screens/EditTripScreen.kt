@@ -1,8 +1,6 @@
 package tw.tripbook.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -12,17 +10,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import tw.tripbook.TripViewModel
 import tw.tripbook.data.MemberDraft
 import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
@@ -37,12 +33,7 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
     var poolCash by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
-    val scope = rememberCoroutineScope()
     val snack = remember { SnackbarHostState() }
-
-    fun bring(req: BringIntoViewRequester) {
-        scope.launch { req.bringIntoView() }
-    }
 
     Scaffold(
         containerColor = Cream,
@@ -63,50 +54,52 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
                 .padding(pad)
                 .imePadding()
                 .verticalScroll(scroll)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            val nameReq = remember { BringIntoViewRequester() }
-            VisibleTextField(
-                name, { name = it }, "行程名稱",
-                Modifier.bringIntoViewRequester(nameReq).onFocusEvent { if (it.isFocused) bring(nameReq) }
-            )
-            val placeReq = remember { BringIntoViewRequester() }
-            VisibleTextField(
-                place, { place = it }, "地點",
-                Modifier.bringIntoViewRequester(placeReq).onFocusEvent { if (it.isFocused) bring(placeReq) }
-            )
+            VisibleTextField(name, { name = it }, "行程名稱")
+            VisibleTextField(place, { place = it }, "地點")
             CurrencyDropdown(currency, onChange = { currency = it })
             DatePickerButton("開始日期", start, onPicked = { start = it })
             DatePickerButton("結束日期", end, onPicked = { end = it })
 
-            Text("我帶了多少現金", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
-            val myCashReq = remember { BringIntoViewRequester() }
+            Text("本人帶了多少現金", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
             VisibleMoneyField(
-                myCash, {
+                myCash,
+                {
                     myCash = it
-                    // keep first member starting cash in sync
                     if (drafts.isNotEmpty()) {
                         drafts = drafts.toMutableList().also { list ->
                             list[0] = list[0].copy(startingCash = it.toLongOrNull() ?: 0)
                         }
                     }
                 },
-                "初始現金（我）",
-                Modifier.bringIntoViewRequester(myCashReq).onFocusEvent { if (it.isFocused) bring(myCashReq) }
+                "本人初始現金"
             )
-
             VisibleMoneyField(poolCash, { poolCash = it }, "公款初始現金（可留空）")
 
-            Text("旅伴（一個一個新增，第一位是我）", fontWeight = FontWeight.Bold, color = InkSoft)
+            Text("旅伴（第一位是本人，不可刪除）", fontWeight = FontWeight.Bold, color = InkSoft)
             drafts.forEachIndexed { i, d ->
                 SoftCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         MemberAvatar(d.name, i, 36)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(d.name + if (i == 0) "（我）" else "", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Ink)
-                            Text("初始現金 ${d.startingCash}", color = MintDeep, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                if (i == 0) "${d.name}（本人）" else d.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Ink,
+                                maxLines = 1
+                            )
+                            Text(
+                                "初始現金 ${d.startingCash}",
+                                color = MintDeep,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                maxLines = 1
+                            )
                         }
                         if (i > 0) {
                             IconButton(onClick = {
@@ -120,28 +113,14 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
             SoftCard {
                 Text("新增旅伴", fontWeight = FontWeight.Bold, color = Ink)
                 Spacer(Modifier.height(8.dp))
-                val addNameReq = remember { BringIntoViewRequester() }
-                VisibleTextField(
-                    draftName, { draftName = it }, "旅伴名字",
-                    Modifier.bringIntoViewRequester(addNameReq).onFocusEvent { if (it.isFocused) bring(addNameReq) }
-                )
+                VisibleTextField(draftName, { draftName = it }, "旅伴名字")
                 Spacer(Modifier.height(8.dp))
-                val addCashReq = remember { BringIntoViewRequester() }
-                VisibleMoneyField(
-                    draftCash, { draftCash = it }, "他帶了多少現金（可留空）",
-                    Modifier.bringIntoViewRequester(addCashReq).onFocusEvent { if (it.isFocused) bring(addCashReq) }
-                )
+                VisibleMoneyField(draftCash, { draftCash = it }, "他帶了多少現金（可留空）")
                 Spacer(Modifier.height(10.dp))
                 MintButton("新增旅伴", Modifier.fillMaxWidth()) {
                     val n = draftName.trim()
-                    if (n.isEmpty()) {
-                        error = "請輸入旅伴名字"
-                        return@MintButton
-                    }
-                    if (drafts.any { it.name.equals(n, true) }) {
-                        error = "已經有這位旅伴了"
-                        return@MintButton
-                    }
+                    if (n.isEmpty()) { error = "請輸入旅伴名字"; return@MintButton }
+                    if (drafts.any { it.name.equals(n, true) }) { error = "已經有這位旅伴了"; return@MintButton }
                     drafts = drafts + MemberDraft(n, draftCash.toLongOrNull() ?: 0)
                     draftName = ""; draftCash = ""
                 }
@@ -154,7 +133,9 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
                     drafts.isEmpty() -> error = "至少一位旅伴"
                     else -> {
                         val synced = drafts.toMutableList().also {
-                            if (it.isNotEmpty()) it[0] = it[0].copy(startingCash = myCash.toLongOrNull() ?: it[0].startingCash)
+                            if (it.isNotEmpty()) it[0] = it[0].copy(
+                                startingCash = myCash.toLongOrNull() ?: it[0].startingCash
+                            )
                         }
                         vm.createTrip(
                             name.trim(), place.trim(), currency, start, end, synced,
@@ -163,7 +144,8 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
                     }
                 }
             }
-            Spacer(Modifier.height(32.dp))
+            // Extra space so last fields can sit above tall Zhuyin IME
+            Spacer(Modifier.height(280.dp))
         }
     }
 

@@ -58,14 +58,15 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     LaunchedEffect(exps, mems) { transfers = vm.transfers(tripId) }
     val ctx = LocalContext.current
     val total = exps.sumOf { it.amountCents }
+    val currency = trip?.currency ?: "TWD"
     val nameOf = { id: Long -> mems.firstOrNull { it.id == id }?.name ?: "?" }
     val chat = buildString {
         appendLine("【${trip?.name ?: "行程"} 結算】")
         if (transfers.isEmpty()) appendLine("已結清，沒有需要轉的帳。")
         else transfers.forEach { appendLine("${nameOf(it.fromMemberId)} 轉給 ${nameOf(it.toMemberId)} ${Money.format(it.amountCents, trip?.currency ?: "TWD")}") }
         appendLine("—")
-        mems.forEach { appendLine("${it.name}初始現金 ${Money.format(it.startingCashCents, trip?.currency ?: "TWD")}") }
-        appendLine("公款初始 ${Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0)}（${mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"}保管）可現場發還或折抵。")
+        mems.forEach { appendLine("${it.name}剩餘現金 ${Money.format(it.cashCents, trip?.currency ?: "TWD")}") }
+        appendLine("公款剩餘 ${Money.format(trip?.poolCashCents ?: 0, currency)}（${mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"}保管）可現場發還或折抵。")
     }
 
     Scaffold(
@@ -88,22 +89,22 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                 GradientHeader(peach = true) {
                     Text("算清楚了！", color = Color.White, fontWeight = FontWeight.Bold)
                     Text(if (transfers.isEmpty()) "沒有未結清的帳" else "只要轉 ${transfers.size} 筆就結清", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    Text("總支出 ${Money.format(total)} · ${mems.size} 人", color = Color.White.copy(alpha = 0.95f))
+                    Text("總支出 ${Money.format(total, currency)} · ${mems.size} 人", color = Color.White.copy(alpha = 0.95f))
                 }
                 Spacer(Modifier.height(12.dp))
                 SoftCard {
-                    Text("初始現金", fontWeight = FontWeight.Black)
+                    Text("剩餘現金", fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         mems.forEach { m ->
                             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Cream).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(m.name, fontSize = 11.sp, color = InkSoft, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(Money.format(m.startingCashCents), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                                Text(Money.format(m.cashCents, currency), fontSize = 12.sp, fontWeight = FontWeight.Black)
                             }
                         }
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(MintSoft).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("公款初始", fontSize = 11.sp, color = MintDeep, fontWeight = FontWeight.Bold)
-                            Text(Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                            Text("公款剩餘", fontSize = 11.sp, color = MintDeep, fontWeight = FontWeight.Bold)
+                            Text(Money.format(trip?.poolCashCents ?: 0, currency), fontSize = 12.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 }
@@ -125,7 +126,7 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                             Text(from.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(Money.format(t.amountCents), color = MintDeep, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                            Text(Money.format(t.amountCents, currency), color = MintDeep, fontWeight = FontWeight.Black, fontSize = 20.sp)
                             Text("轉給 ›", color = InkSoft, fontSize = 12.sp)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {

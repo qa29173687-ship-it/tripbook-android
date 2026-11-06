@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // IME handled only via Compose imePadding on form screens (not ADJUST_RESIZE — avoids double inset / scroll away).
         setContent {
             TripBookTheme {
                 Surface(color = Cream) {
@@ -56,7 +56,7 @@ fun AppNav(vm: TripViewModel) {
 
     Scaffold(
         containerColor = Cream,
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottom) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {

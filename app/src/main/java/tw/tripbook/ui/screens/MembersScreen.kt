@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -13,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,17 +27,16 @@ import tw.tripbook.util.Money
 fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (Long?) -> Unit) {
     val trip by vm.trip(tripId).collectAsStateWithLifecycle(null)
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
+    val currency = trip?.currency ?: "TWD"
     var newName by remember { mutableStateOf("") }
     var newCash by remember { mutableStateOf("") }
     var editStartFor by remember { mutableStateOf<Long?>(null) }
     var cashInput by remember { mutableStateOf("") }
     val ctx = LocalContext.current
-    val snack = remember { SnackbarHostState() }
 
     Scaffold(
         containerColor = Cream,
         contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
                 title = { Text("旅伴與現金", fontWeight = FontWeight.Black) },
@@ -56,12 +53,11 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
             ) {
                 item {
                     SoftCard {
-                        Text("公款初始現金", color = InkSoft, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(
-                            Money.format(trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0, trip?.currency ?: "TWD"),
-                            fontWeight = FontWeight.Black,
-                            fontSize = 28.sp,
-                            color = Ink
+                        CashSummaryBlock(
+                            remaining = trip?.poolCashCents ?: 0,
+                            starting = trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0,
+                            currency = currency,
+                            remainingLabel = "公款剩餘現金"
                         )
                     }
                     Spacer(Modifier.height(12.dp))
@@ -75,7 +71,7 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    m.name + if (m.isMe) "（我）" else "",
+                                    if (m.isMe) "${m.name}（本人）" else m.name,
                                     fontWeight = FontWeight.Black,
                                     fontSize = 17.sp,
                                     color = Ink,
@@ -83,17 +79,23 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "初始現金 ${Money.format(m.startingCashCents, trip?.currency ?: "TWD")}",
+                                    "剩餘現金 ${Money.format(m.cashCents, currency)}",
                                     color = MintDeep,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "初始 ${Money.format(m.startingCashCents, currency)}",
+                                    color = InkSoft,
+                                    fontSize = 12.sp,
                                     maxLines = 1
                                 )
                             }
                             TextButton(onClick = {
                                 editStartFor = m.id
                                 cashInput = m.startingCashCents.toString()
-                            }) { Text("修改", color = PeachDeep, fontWeight = FontWeight.Bold) }
+                            }) { Text("修改初始", color = PeachDeep, fontWeight = FontWeight.Bold) }
                             if (!m.isMe) {
                                 IconButton(onClick = {
                                     vm.deleteMember(m.id) { ok ->
@@ -125,6 +127,7 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
                     vm.addMember(tripId, n, newCash.toLongOrNull() ?: 0)
                     newName = ""; newCash = ""
                 }
+                Spacer(Modifier.height(120.dp))
             }
         }
     }
@@ -133,9 +136,7 @@ fun MembersScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit, onCash: (
         AlertDialog(
             onDismissRequest = { editStartFor = null },
             title = { Text("修改初始現金") },
-            text = {
-                VisibleMoneyField(cashInput, { cashInput = it }, "初始現金")
-            },
+            text = { VisibleMoneyField(cashInput, { cashInput = it }, "初始現金") },
             confirmButton = {
                 TextButton(onClick = {
                     cashInput.toLongOrNull()?.let { vm.setStartingCash(mid, it) }
