@@ -15,6 +15,11 @@ object SplitMath {
         }
     }
 
+    fun perPersonShare(totalCents: Long, splitterCount: Int): Long {
+        if (splitterCount <= 0) return 0
+        return totalCents / splitterCount
+    }
+
     fun nets(
         paidByMember: Map<Long, Long>,
         shareByMember: Map<Long, Long>,

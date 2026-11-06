@@ -32,20 +32,18 @@ import java.time.format.DateTimeFormatter
 fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack: () -> Unit) {
     val trip by vm.trip(tripId).collectAsStateWithLifecycle(null)
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
-    val member = mems.firstOrNull { it.id == memberId }
-    val isPool = memberId == null
+    // Pool UI removed: null memberId falls back to 本人.
+    val effectiveId = memberId ?: mems.firstOrNull { it.isMe }?.id ?: mems.firstOrNull()?.id
+    val member = mems.firstOrNull { it.id == effectiveId }
     val currency = trip?.currency ?: "TWD"
-    val title = if (isPool) "公款現金" else "${member?.name ?: ""}現金"
-    val remaining = if (isPool) trip?.poolCashCents ?: 0 else member?.cashCents ?: 0
-    val starting = if (isPool) {
-        trip?.poolStartingCashCents ?: trip?.poolCashCents ?: 0
-    } else {
-        member?.startingCashCents ?: 0
-    }
+    val title = "${member?.name ?: ""}現金"
+    val remaining = member?.cashCents ?: 0
+    val starting = member?.startingCashCents ?: 0
     var entries by remember { mutableStateOf<List<CashTimelineEntry>>(emptyList()) }
 
-    LaunchedEffect(trip?.poolCashCents, mems, memberId) {
-        entries = vm.timeline(tripId, memberId)
+    LaunchedEffect(mems, effectiveId, trip?.id) {
+        if (effectiveId == null) return@LaunchedEffect
+        entries = vm.timeline(tripId, effectiveId)
             .filter { it.kind == CashKind.EXPENSE || it.kind == CashKind.EXPENSE_REVERSE }
     }
 
@@ -66,7 +64,7 @@ fun CashTimelineScreen(vm: TripViewModel, tripId: Long, memberId: Long?, onBack:
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             item {
-                GradientHeader(peach = !isPool) {
+                GradientHeader(peach = true) {
                     Text("剩餘現金", color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Bold)
                     Text(Money.format(remaining, currency), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
                     Text("初始 ${Money.format(starting, currency)}", color = Color.White.copy(alpha = 0.92f), fontSize = 14.sp)

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tw.tripbook.TripViewModel
 import tw.tripbook.data.MemberDraft
 import tw.tripbook.ui.components.*
@@ -20,7 +21,17 @@ import tw.tripbook.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit) {
+fun EditTripScreen(
+    vm: TripViewModel,
+    onDone: (Long) -> Unit,
+    onBack: () -> Unit,
+    tripId: Long? = null
+) {
+    val editing = tripId != null
+    val tripFlow = remember(tripId) {
+        if (tripId != null) vm.trip(tripId) else kotlinx.coroutines.flow.flowOf(null)
+    }
+    val existing by tripFlow.collectAsStateWithLifecycle(null)
     var name by remember { mutableStateOf("") }
     var place by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("TWD") }
@@ -30,10 +41,22 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
     var draftName by remember { mutableStateOf("") }
     var draftCash by remember { mutableStateOf("") }
     var myCash by remember { mutableStateOf("") }
-    var poolCash by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var loaded by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val snack = remember { SnackbarHostState() }
+
+    LaunchedEffect(existing) {
+        if (editing && existing != null && !loaded) {
+            val t = existing!!
+            name = t.name
+            place = t.place
+            currency = t.currency
+            start = t.startDate
+            end = t.endDate
+            loaded = true
+        }
+    }
 
     Scaffold(
         containerColor = Cream,
@@ -41,7 +64,7 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
-                title = { Text("新增行程", fontWeight = FontWeight.Black) },
+                title = { Text(if (editing) "編輯行程" else "新增行程", fontWeight = FontWeight.Black) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Cream),
                 windowInsets = WindowInsets.statusBars
@@ -61,76 +84,87 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
             VisibleTextField(name, { name = it }, "行程名稱")
             VisibleTextField(place, { place = it }, "地點")
             CurrencyDropdown(currency, onChange = { currency = it })
-            DatePickerButton("開始日期", start, onPicked = { start = it })
-            DatePickerButton("結束日期", end, onPicked = { end = it })
-
-            Text("本人帶了多少現金", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
-            VisibleMoneyField(
-                myCash,
-                {
-                    myCash = it
-                    if (drafts.isNotEmpty()) {
-                        drafts = drafts.toMutableList().also { list ->
-                            list[0] = list[0].copy(startingCash = it.toLongOrNull() ?: 0)
-                        }
-                    }
-                },
-                "本人初始現金"
+            DateRangePickerButton(
+                startIso = start,
+                endIso = end,
+                onPicked = { s, e -> start = s; end = e }
             )
-            VisibleMoneyField(poolCash, { poolCash = it }, "公款初始現金（可留空）")
 
-            Text("旅伴（第一位是本人，不可刪除）", fontWeight = FontWeight.Bold, color = InkSoft)
-            drafts.forEachIndexed { i, d ->
-                SoftCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MemberAvatar(d.name, i, 36)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                if (i == 0) "${d.name}（本人）" else d.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = Ink,
-                                maxLines = 1
-                            )
-                            Text(
-                                "初始現金 ${d.startingCash}",
-                                color = MintDeep,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                maxLines = 1
-                            )
+            if (!editing) {
+                Text("本人帶了多少現金", fontWeight = FontWeight.Bold, color = Ink, fontSize = 15.sp)
+                VisibleMoneyField(
+                    myCash,
+                    {
+                        myCash = it
+                        if (drafts.isNotEmpty()) {
+                            drafts = drafts.toMutableList().also { list ->
+                                list[0] = list[0].copy(startingCash = it.toLongOrNull() ?: 0)
+                            }
                         }
-                        if (i > 0) {
-                            IconButton(onClick = {
-                                drafts = drafts.toMutableList().also { it.removeAt(i) }
-                            }) { Icon(Icons.Default.Close, null, tint = InkSoft) }
+                    },
+                    "本人初始現金"
+                )
+
+                Text("旅伴（第一位是本人，不可刪除）", fontWeight = FontWeight.Bold, color = InkSoft)
+                drafts.forEachIndexed { i, d ->
+                    SoftCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            MemberAvatar(d.name, i, 36)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (i == 0) "${d.name}（本人）" else d.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Ink,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "初始現金 ${d.startingCash}",
+                                    color = MintDeep,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            if (i > 0) {
+                                IconButton(onClick = {
+                                    drafts = drafts.toMutableList().also { it.removeAt(i) }
+                                }) { Icon(Icons.Default.Close, null, tint = InkSoft) }
+                            }
                         }
                     }
                 }
-            }
 
-            SoftCard {
-                Text("新增旅伴", fontWeight = FontWeight.Bold, color = Ink)
-                Spacer(Modifier.height(8.dp))
-                VisibleTextField(draftName, { draftName = it }, "旅伴名字")
-                Spacer(Modifier.height(8.dp))
-                VisibleMoneyField(draftCash, { draftCash = it }, "他帶了多少現金（可留空）")
-                Spacer(Modifier.height(10.dp))
-                MintButton("新增旅伴", Modifier.fillMaxWidth()) {
-                    val n = draftName.trim()
-                    if (n.isEmpty()) { error = "請輸入旅伴名字"; return@MintButton }
-                    if (drafts.any { it.name.equals(n, true) }) { error = "已經有這位旅伴了"; return@MintButton }
-                    drafts = drafts + MemberDraft(n, draftCash.toLongOrNull() ?: 0)
-                    draftName = ""; draftCash = ""
+                SoftCard {
+                    Text("新增旅伴", fontWeight = FontWeight.Bold, color = Ink)
+                    Spacer(Modifier.height(8.dp))
+                    VisibleTextField(draftName, { draftName = it }, "旅伴名字")
+                    Spacer(Modifier.height(8.dp))
+                    VisibleMoneyField(draftCash, { draftCash = it }, "他帶了多少現金（可留空）")
+                    Spacer(Modifier.height(10.dp))
+                    MintButton("新增旅伴", Modifier.fillMaxWidth()) {
+                        val n = draftName.trim()
+                        if (n.isEmpty()) { error = "請輸入旅伴名字"; return@MintButton }
+                        if (drafts.any { it.name.equals(n, true) }) { error = "已經有這位旅伴了"; return@MintButton }
+                        drafts = drafts + MemberDraft(n, draftCash.toLongOrNull() ?: 0)
+                        draftName = ""; draftCash = ""
+                    }
                 }
+            } else {
+                Text("修改名稱、地點與日期不會影響旅伴與支出。", color = InkSoft, fontSize = 13.sp)
             }
 
-            MintButton("建立行程", Modifier.fillMaxWidth()) {
+            MintButton(if (editing) "儲存行程" else "建立行程", Modifier.fillMaxWidth()) {
                 when {
                     name.isBlank() -> error = "請填行程名稱"
-                    start.isBlank() || end.isBlank() -> error = "請選擇開始與結束日期"
-                    drafts.isEmpty() -> error = "至少一位旅伴"
+                    start.isBlank() || end.isBlank() -> error = "請選擇旅程日期（點兩下選起迄）"
+                    !editing && drafts.isEmpty() -> error = "至少一位旅伴"
+                    editing && tripId != null -> {
+                        vm.updateTripMeta(tripId, name.trim(), place.trim(), currency, start, end) {
+                            onDone(tripId)
+                        }
+                    }
                     else -> {
                         val synced = drafts.toMutableList().also {
                             if (it.isNotEmpty()) it[0] = it[0].copy(
@@ -139,12 +173,11 @@ fun EditTripScreen(vm: TripViewModel, onDone: (Long) -> Unit, onBack: () -> Unit
                         }
                         vm.createTrip(
                             name.trim(), place.trim(), currency, start, end, synced,
-                            poolStarting = poolCash.toLongOrNull() ?: 0, onDone = onDone
+                            onDone = onDone
                         )
                     }
                 }
             }
-            // Extra space so last fields can sit above tall Zhuyin IME
             Spacer(Modifier.height(280.dp))
         }
     }

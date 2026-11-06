@@ -25,16 +25,36 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun balances(tripId: Long) = repo.computeBalances(tripId)
     suspend fun transfers(tripId: Long) = repo.computeTransfers(tripId)
     suspend fun timeline(tripId: Long, memberId: Long?) = repo.cashTimeline(tripId, memberId)
+    suspend fun getExpense(id: Long) = repo.getExpense(id)
+    suspend fun splitsFor(expenseId: Long) = repo.splitsForExpense(expenseId)
+    suspend fun listMembers(tripId: Long) = repo.listMembers(tripId)
+    suspend fun listExpenses(tripId: Long) = repo.listExpenses(tripId)
 
     fun createTrip(
         name: String, place: String, currency: String,
         start: String, end: String,
         drafts: List<MemberDraft>,
-        poolStarting: Long = 0,
         onDone: (Long) -> Unit
     ) = viewModelScope.launch {
-        val id = repo.createTrip(name, place, currency, start, end, drafts, poolStarting = poolStarting)
+        val id = repo.createTrip(name, place, currency, start, end, drafts, poolStarting = 0)
         onDone(id)
+    }
+
+    fun updateTripMeta(
+        tripId: Long, name: String, place: String, currency: String,
+        start: String, end: String, onDone: () -> Unit = {}
+    ) = viewModelScope.launch {
+        val t = repo.getTrip(tripId) ?: return@launch
+        repo.updateTrip(
+            t.copy(
+                name = name.trim(),
+                place = place.trim(),
+                currency = currency,
+                startDate = start,
+                endDate = end
+            )
+        )
+        onDone()
     }
 
     fun addMember(tripId: Long, name: String, startingCash: Long = 0) =
@@ -47,33 +67,31 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     fun setStartingCash(memberId: Long, amount: Long) =
         viewModelScope.launch { repo.setStartingCash(memberId, amount) }
 
-    fun setMemberCash(memberId: Long, amount: Long, note: String = "手動調整") =
-        viewModelScope.launch { repo.setMemberCashDirect(memberId, amount, note) }
-
-    fun setPool(tripId: Long, amount: Long, holderId: Long?) =
-        viewModelScope.launch { repo.setPoolCashDirect(tripId, amount, holderId) }
-
-    fun addCashMovement(
-        tripId: Long, memberId: Long?, direction: CashDirection,
-        kind: CashKind, amount: Long, note: String, onDone: () -> Unit = {}
-    ) = viewModelScope.launch {
-        repo.addCashMovement(tripId, memberId, direction, kind, amount, note)
-        onDone()
-    }
-
     fun addExpense(
         tripId: Long, title: String, amount: Long, category: ExpenseCategory,
         payerId: Long, method: PaymentMethod, participants: List<Long>,
-        note: String, receiptPath: String?, onDone: () -> Unit
+        note: String, receiptPath: String?, occurredAt: Long, onDone: () -> Unit
     ) = viewModelScope.launch {
-        repo.addExpense(tripId, title, amount, category, payerId, method, participants, note, receiptPath)
+        repo.addExpense(tripId, title, amount, category, payerId, method, participants, note, receiptPath, occurredAt)
         onDone()
     }
 
-    fun deleteExpense(id: Long) = viewModelScope.launch { repo.deleteExpense(id) }
+    fun updateExpense(
+        expenseId: Long, title: String, amount: Long, category: ExpenseCategory,
+        payerId: Long, method: PaymentMethod, participants: List<Long>,
+        note: String, receiptPath: String?, occurredAt: Long, onDone: () -> Unit
+    ) = viewModelScope.launch {
+        repo.updateExpense(expenseId, title, amount, category, payerId, method, participants, note, receiptPath, occurredAt)
+        onDone()
+    }
+
+    fun deleteExpense(id: Long, onDone: () -> Unit = {}) = viewModelScope.launch {
+        repo.deleteExpense(id)
+        onDone()
+    }
+
     fun markSettled(tripId: Long, settled: Boolean) = viewModelScope.launch { repo.markSettled(tripId, settled) }
     fun deleteTrip(id: Long) = viewModelScope.launch { repo.deleteTrip(id) }
-    fun updateTrip(trip: TripEntity) = viewModelScope.launch { repo.updateTrip(trip) }
 
     suspend fun me(tripId: Long): MemberEntity? = repo.listMembers(tripId).firstOrNull { it.isMe }
         ?: repo.listMembers(tripId).firstOrNull()

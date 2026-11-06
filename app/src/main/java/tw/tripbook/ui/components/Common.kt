@@ -64,14 +64,15 @@ fun CategoryChip(cat: ExpenseCategory) {
 
 @Composable
 fun PayChip(method: PaymentMethod) {
-    val (bg, fg) = when (method) {
+    val shown = if (method == PaymentMethod.POOL) PaymentMethod.CASH else method
+    val (bg, fg) = when (shown) {
         PaymentMethod.CASH -> PeachSoft to PeachDeep
         PaymentMethod.CARD -> Color(0xFFE8F0FF) to Color(0xFF4A6FBF)
         PaymentMethod.TRANSFER -> MintSoft to MintDeep
-        PaymentMethod.POOL -> MintSoft to MintDeep
+        PaymentMethod.POOL -> PeachSoft to PeachDeep
     }
     Text(
-        method.label,
+        shown.label,
         modifier = Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 10.dp, vertical = 4.dp),
         color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold
     )

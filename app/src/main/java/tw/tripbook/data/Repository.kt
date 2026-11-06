@@ -158,12 +158,15 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
+    suspend fun getExpense(id: Long) = expenses.get(id)
+    suspend fun splitsForExpense(expenseId: Long) = expenses.splitsFor(expenseId)
+
     suspend fun addExpense(
         tripId: Long,
         title: String,
         amountCents: Long,
         category: ExpenseCategory,
-        payerMemberId: Long, // -1L for pool payer
+        payerMemberId: Long,
         method: PaymentMethod,
         participantIds: List<Long>,
         note: String = "",
@@ -172,8 +175,8 @@ class Repository(private val db: AppDatabase) {
     ): Long {
         require(amountCents >= 0)
         require(participantIds.isNotEmpty()) { "至少一位分攤" }
-        if (method == PaymentMethod.POOL) require(payerMemberId == -1L || true)
-        val effectiveMethod = if (payerMemberId == -1L) PaymentMethod.POOL else method
+        require(payerMemberId > 0) { "付款人必填" }
+        val effectiveMethod = if (method == PaymentMethod.POOL) PaymentMethod.CASH else method
         val splits = SplitMath.equalSplit(amountCents, participantIds)
         val id = expenses.insert(
             ExpenseEntity(
@@ -181,7 +184,7 @@ class Repository(private val db: AppDatabase) {
                 title = title,
                 amountCents = amountCents,
                 category = category.name,
-                payerMemberId = if (effectiveMethod == PaymentMethod.POOL) -1L else payerMemberId,
+                payerMemberId = payerMemberId,
                 paymentMethod = effectiveMethod.name,
                 note = note,
                 receiptPath = receiptPath,
@@ -189,8 +192,65 @@ class Repository(private val db: AppDatabase) {
             )
         )
         expenses.insertSplits(splits.map { ExpenseSplitEntity(id, it.memberId, it.amountCents) })
-        applyCashForExpense(tripId, id, if (effectiveMethod == PaymentMethod.POOL) -1L else payerMemberId, effectiveMethod, amountCents, title)
+        applyCashForExpense(tripId, id, payerMemberId, effectiveMethod, amountCents, title)
         return id
+    }
+
+    /** Reverse old cash effect, rewrite expense + splits, apply new cash. */
+    suspend fun updateExpense(
+        expenseId: Long,
+        title: String,
+        amountCents: Long,
+        category: ExpenseCategory,
+        payerMemberId: Long,
+        method: PaymentMethod,
+        participantIds: List<Long>,
+        note: String = "",
+        receiptPath: String? = null,
+        occurredAt: Long
+    ) {
+        require(amountCents >= 0)
+        require(participantIds.isNotEmpty())
+        require(payerMemberId > 0)
+        val old = expenses.get(expenseId) ?: return
+        val effectiveMethod = if (method == PaymentMethod.POOL) PaymentMethod.CASH else method
+        // reverse old
+        reverseCashOnly(old)
+        cash.deleteForExpense(expenseId)
+        expenses.deleteSplits(expenseId)
+        val splits = SplitMath.equalSplit(amountCents, participantIds)
+        expenses.update(
+            old.copy(
+                title = title,
+                amountCents = amountCents,
+                category = category.name,
+                payerMemberId = payerMemberId,
+                paymentMethod = effectiveMethod.name,
+                note = note,
+                receiptPath = receiptPath ?: old.receiptPath,
+                occurredAt = occurredAt
+            )
+        )
+        expenses.insertSplits(splits.map { ExpenseSplitEntity(expenseId, it.memberId, it.amountCents) })
+        applyCashForExpense(old.tripId, expenseId, payerMemberId, effectiveMethod, amountCents, title)
+    }
+
+    private suspend fun reverseCashOnly(e: ExpenseEntity) {
+        val method = runCatching { PaymentMethod.valueOf(e.paymentMethod) }.getOrDefault(PaymentMethod.CARD)
+        when (method) {
+            PaymentMethod.CASH -> {
+                if (e.payerMemberId <= 0) return
+                val m = members.get(e.payerMemberId) ?: return
+                val (next, _) = CashLedger.reverseExpensePayment(m.cashCents, 0, e.amountCents, PaymentMethod.CASH)
+                members.update(m.copy(cashCents = next))
+            }
+            PaymentMethod.POOL -> {
+                val t = trips.get(e.tripId) ?: return
+                val (_, next) = CashLedger.reverseExpensePayment(0, t.poolCashCents, e.amountCents, PaymentMethod.POOL)
+                trips.update(t.copy(poolCashCents = next))
+            }
+            else -> Unit
+        }
     }
 
     private suspend fun applyCashForExpense(
@@ -228,20 +288,7 @@ class Repository(private val db: AppDatabase) {
 
     suspend fun deleteExpense(expenseId: Long) {
         val e = expenses.get(expenseId) ?: return
-        val method = PaymentMethod.valueOf(e.paymentMethod)
-        when (method) {
-            PaymentMethod.CASH -> {
-                val m = members.get(e.payerMemberId) ?: return
-                val (next, _) = CashLedger.reverseExpensePayment(m.cashCents, 0, e.amountCents, PaymentMethod.CASH)
-                members.update(m.copy(cashCents = next))
-            }
-            PaymentMethod.POOL -> {
-                val t = trips.get(e.tripId) ?: return
-                val (_, next) = CashLedger.reverseExpensePayment(0, t.poolCashCents, e.amountCents, PaymentMethod.POOL)
-                trips.update(t.copy(poolCashCents = next))
-            }
-            else -> Unit
-        }
+        reverseCashOnly(e)
         cash.deleteForExpense(expenseId)
         expenses.deleteSplits(expenseId)
         expenses.delete(expenseId)
@@ -316,14 +363,10 @@ class Repository(private val db: AppDatabase) {
                 MemberDraft("小美", 5000),
                 MemberDraft("阿明", 6000)
             ),
-            meIndex = 0,
-            poolStarting = 3000
+            meIndex = 0
         )
         val mems = members.listForTrip(tripId)
         val hw = mems[0].id; val xm = mems[1].id; val am = mems[2].id
-        val t = trips.get(tripId)!!
-        trips.update(t.copy(poolHolderMemberId = hw))
-
         fun day(d: Int, h: Int = 12) = java.time.LocalDateTime.of(2026, 11, d, h, 0)
             .atZone(java.time.ZoneId.of("Asia/Taipei")).toInstant().toEpochMilli()
 

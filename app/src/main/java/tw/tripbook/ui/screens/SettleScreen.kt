@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tw.tripbook.TripViewModel
+import tw.tripbook.domain.PaymentMethod
+import tw.tripbook.domain.SplitMath
 import tw.tripbook.domain.Transfer
 import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.*
@@ -55,7 +57,34 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
     val exps by vm.expenses(tripId).collectAsStateWithLifecycle(emptyList())
     var transfers by remember { mutableStateOf<List<Transfer>>(emptyList()) }
-    LaunchedEffect(exps, mems) { transfers = vm.transfers(tripId) }
+    data class ExpRow(
+        val title: String,
+        val amount: Long,
+        val payer: String,
+        val splitters: String,
+        val method: PaymentMethod,
+        val share: Long
+    )
+    var rows by remember { mutableStateOf<List<ExpRow>>(emptyList()) }
+    LaunchedEffect(exps, mems) {
+        transfers = vm.transfers(tripId)
+        val built = mutableListOf<ExpRow>()
+        for (e in exps.sortedBy { it.occurredAt }) {
+            val splits = vm.splitsFor(e.id)
+            val names = splits.mapNotNull { s -> mems.firstOrNull { it.id == s.memberId }?.name }
+            val payer = mems.firstOrNull { it.id == e.payerMemberId }?.name ?: "?"
+            val method = runCatching { PaymentMethod.valueOf(e.paymentMethod) }.getOrDefault(PaymentMethod.CASH)
+            built += ExpRow(
+                title = e.title,
+                amount = e.amountCents,
+                payer = payer,
+                splitters = names.joinToString("、"),
+                method = method,
+                share = SplitMath.perPersonShare(e.amountCents, names.size.coerceAtLeast(1))
+            )
+        }
+        rows = built
+    }
     val ctx = LocalContext.current
     val total = exps.sumOf { it.amountCents }
     val currency = trip?.currency ?: "TWD"
@@ -63,10 +92,16 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     val chat = buildString {
         appendLine("【${trip?.name ?: "行程"} 結算】")
         if (transfers.isEmpty()) appendLine("已結清，沒有需要轉的帳。")
-        else transfers.forEach { appendLine("${nameOf(it.fromMemberId)} 轉給 ${nameOf(it.toMemberId)} ${Money.format(it.amountCents, trip?.currency ?: "TWD")}") }
+        else transfers.forEach { appendLine("${nameOf(it.fromMemberId)} 轉給 ${nameOf(it.toMemberId)} ${Money.format(it.amountCents, currency)}") }
         appendLine("—")
-        mems.forEach { appendLine("${it.name}剩餘現金 ${Money.format(it.cashCents, trip?.currency ?: "TWD")}") }
-        appendLine("公款剩餘 ${Money.format(trip?.poolCashCents ?: 0, currency)}（${mems.firstOrNull { it.id == trip?.poolHolderMemberId }?.name ?: "未指定"}保管）可現場發還或折抵。")
+        mems.forEach { appendLine("${it.name}剩餘現金 ${Money.format(it.cashCents, currency)}") }
+        if (rows.isNotEmpty()) {
+            appendLine("—")
+            appendLine("每一筆明細：")
+            rows.forEach { r ->
+                appendLine("· ${r.title} ${Money.format(r.amount, currency)}｜${r.payer}付｜${r.splitters}｜${r.method.label}")
+            }
+        }
     }
 
     Scaffold(
@@ -102,10 +137,6 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                                 Text(Money.format(m.cashCents, currency), fontSize = 12.sp, fontWeight = FontWeight.Black)
                             }
                         }
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(MintSoft).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("公款剩餘", fontSize = 11.sp, color = MintDeep, fontWeight = FontWeight.Bold)
-                            Text(Money.format(trip?.poolCashCents ?: 0, currency), fontSize = 12.sp, fontWeight = FontWeight.Black)
-                        }
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -132,6 +163,29 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             MemberAvatar(to.name, to.colorIndex, 48)
                             Text(to.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text("每一筆明細", fontWeight = FontWeight.Bold, color = InkSoft)
+                Spacer(Modifier.height(8.dp))
+            }
+            items(rows.size) { i ->
+                val r = rows[i]
+                SoftCard(Modifier.padding(bottom = 8.dp)) {
+                    Row {
+                        Column(Modifier.weight(1f)) {
+                            Text(r.title, fontWeight = FontWeight.Black)
+                            Text("${r.payer} 付 · ${r.method.label}", color = InkSoft, fontSize = 12.sp)
+                            if (r.splitters.isNotEmpty()) {
+                                Text(r.splitters, color = InkSoft, fontSize = 12.sp)
+                            }
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(Money.format(r.amount, currency), fontWeight = FontWeight.Black)
+                            Text("一人 ${Money.format(r.share, currency)}", color = InkSoft, fontSize = 11.sp)
                         }
                     }
                 }

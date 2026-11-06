@@ -3,6 +3,7 @@ package tw.tripbook
 import org.junit.Assert.*
 import org.junit.Test
 import tw.tripbook.domain.*
+import tw.tripbook.util.Dates
 
 class LogicTest {
     @Test fun equalSplitThree() {
@@ -19,6 +20,12 @@ class LogicTest {
     @Test fun equalSplitExclude() {
         val s = SplitMath.equalSplit(1800, listOf(1, 2))
         assertEquals(listOf(900L, 900L), s.map { it.amountCents })
+    }
+
+    @Test fun perPersonShareFloor() {
+        assertEquals(400L, SplitMath.perPersonShare(1200, 3))
+        assertEquals(333L, SplitMath.perPersonShare(1000, 3))
+        assertEquals(0L, SplitMath.perPersonShare(1000, 0))
     }
 
     @Test fun tokyoDemoNetsAndSettlement() {
@@ -93,6 +100,28 @@ class LogicTest {
         assertEquals(3000L, pool)
     }
 
+    @Test fun editExpenseMovesCashBetweenPayers() {
+        // A paid 1200 cash → remaining 3800; edit to B paid cash → A restored, B deducted
+        var a = 5000L
+        var b = 5000L
+        a = CashLedger.applyExpensePayment(a, 0, 1200, PaymentMethod.CASH).first
+        assertEquals(3800L, a)
+        val (a2, _) = CashLedger.replaceExpensePayment(a, 0, 1200, PaymentMethod.CASH, 1200, PaymentMethod.CARD)
+        a = a2
+        assertEquals(5000L, a)
+        b = CashLedger.applyExpensePayment(b, 0, 1200, PaymentMethod.CASH).first
+        assertEquals(3800L, b)
+        assertEquals(5000L, a)
+    }
+
+    @Test fun editExpenseAmountAdjustsRemaining() {
+        var rem = 10_000L
+        rem = CashLedger.applyExpensePayment(rem, 0, 3000, PaymentMethod.CASH).first
+        assertEquals(7000L, rem)
+        rem = CashLedger.replaceExpensePayment(rem, 0, 3000, PaymentMethod.CASH, 1500, PaymentMethod.CASH).first
+        assertEquals(8500L, rem)
+    }
+
     @Test fun startingCashUnchangedWhenExpenseDeductsRemaining() {
         val starting = 8000L
         var remaining = starting
@@ -139,5 +168,20 @@ class LogicTest {
         assertEquals(starting, remaining)
         remaining = CashLedger.applyExpensePayment(remaining, 0, 3000, PaymentMethod.TRANSFER).first
         assertEquals(starting, remaining)
+    }
+
+    @Test fun defaultExpenseIsoInsideTripIsToday() {
+        val today = Dates.todayIso()
+        assertEquals(today, Dates.defaultExpenseIso(today, today))
+    }
+
+    @Test fun defaultExpenseIsoAfterTripIsEnd() {
+        assertEquals("2026-01-05", Dates.defaultExpenseIso("2026-01-01", "2026-01-05"))
+    }
+
+    @Test fun clampExpenseDateToTrip() {
+        assertEquals("2026-11-01", Dates.clampIsoToRange("2026-10-01", "2026-11-01", "2026-11-03"))
+        assertEquals("2026-11-03", Dates.clampIsoToRange("2026-12-01", "2026-11-01", "2026-11-03"))
+        assertEquals("2026-11-02", Dates.clampIsoToRange("2026-11-02", "2026-11-01", "2026-11-03"))
     }
 }
