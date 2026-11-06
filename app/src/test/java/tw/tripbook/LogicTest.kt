@@ -184,4 +184,25 @@ class LogicTest {
         assertEquals("2026-11-03", Dates.clampIsoToRange("2026-12-01", "2026-11-01", "2026-11-03"))
         assertEquals("2026-11-02", Dates.clampIsoToRange("2026-11-02", "2026-11-01", "2026-11-03"))
     }
+
+
+    @Test fun blankItemTitleBecomesExpense() {
+        fun displayTitle(raw: String) = raw.trim().ifBlank { "支出" }
+        assertEquals("一蘭拉麵", displayTitle("一蘭拉麵"))
+        assertEquals("支出", displayTitle(""))
+        assertEquals("支出", displayTitle("   "))
+    }
+
+    @Test fun settleCopyHasNoRemainingCashLabel() {
+        val chat = buildString {
+            appendLine("【東京三日遊 結算】")
+            appendLine("小美 轉給 宏威 NT$2,600")
+            appendLine("—")
+            appendLine("總消費明細：")
+            appendLine("· 新宿飯店 NT$6,000｜宏威付｜宏威、小美、阿明｜刷卡")
+        }
+        assertFalse(chat.contains("剩餘現金"))
+        assertTrue(chat.contains("總消費明細"))
+        assertTrue(chat.contains("小美 轉給 宏威"))
+    }
 }

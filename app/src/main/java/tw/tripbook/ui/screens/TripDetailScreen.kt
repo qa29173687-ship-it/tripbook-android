@@ -190,7 +190,6 @@ fun TripDetailScreen(
                 }
                 items(list, key = { it.id }) { e ->
                     val payer = mems.firstOrNull { it.id == e.payerMemberId }?.name ?: "?"
-                    val cat = runCatching { ExpenseCategory.valueOf(e.category) }.getOrDefault(ExpenseCategory.OTHER)
                     val method = runCatching { PaymentMethod.valueOf(e.paymentMethod) }.getOrDefault(PaymentMethod.CASH)
                     val names = splitNames[e.id].orEmpty()
                     val share = SplitMath.perPersonShare(e.amountCents, names.size.coerceAtLeast(1))
@@ -232,7 +231,6 @@ fun TripDetailScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        CategoryChip(cat)
                                         Text("$payer 付", color = InkSoft, fontSize = 12.sp)
                                         PayChip(method)
                                     }

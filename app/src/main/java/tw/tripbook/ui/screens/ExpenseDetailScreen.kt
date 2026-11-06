@@ -68,7 +68,6 @@ fun ExpenseDetailScreen(
             }
             return@Scaffold
         }
-        val cat = runCatching { ExpenseCategory.valueOf(e.category) }.getOrDefault(ExpenseCategory.OTHER)
         val method = runCatching { PaymentMethod.valueOf(e.paymentMethod) }.getOrDefault(PaymentMethod.CASH)
         val payer = mems.firstOrNull { it.id == e.payerMemberId }
         Column(
@@ -86,7 +85,6 @@ fun ExpenseDetailScreen(
                 Text("一人 ${Money.format(share, currency)}", color = InkSoft, fontSize = 14.sp)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CategoryChip(cat)
                     PayChip(method)
                 }
                 Spacer(Modifier.height(8.dp))

@@ -49,7 +49,7 @@ fun AddExpenseScreen(
     val editing = expenseId != null
     var amountText by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(ExpenseCategory.FOOD) }
+    var category by remember { mutableStateOf(ExpenseCategory.OTHER) }
     var payerId by remember { mutableStateOf(-2L) }
     var method by remember { mutableStateOf(PaymentMethod.CASH) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -106,7 +106,7 @@ fun AddExpenseScreen(
 
     Scaffold(
         containerColor = Cream,
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
@@ -128,9 +128,9 @@ fun AddExpenseScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             SoftCard {
-                VisibleMoneyField(amountText, { amountText = it }, "金額")
+                VisibleTextField(title, { title = it }, "項目", placeholder = "這筆是什麼；留白則顯示「支出」")
                 Spacer(Modifier.height(8.dp))
-                VisibleTextField(title, { title = it }, "項目（可留空）", placeholder = "空白則用分類名稱")
+                VisibleMoneyField(amountText, { amountText = it }, "金額")
             }
             DatePickerButton(
                 label = "支出日期",
@@ -139,12 +139,6 @@ fun AddExpenseScreen(
                 minIso = trip?.startDate,
                 maxIso = trip?.endDate
             )
-            Text("分類", fontWeight = FontWeight.Bold, color = InkSoft)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ExpenseCategory.entries.forEach { c ->
-                    Pill(c.label, category == c) { category = c }
-                }
-            }
             Text("誰付的（預設本人）", fontWeight = FontWeight.Bold, color = InkSoft)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 mems.forEach { m ->
@@ -234,7 +228,7 @@ fun AddExpenseScreen(
                         payerId <= 0 -> notify("請選擇付款人")
                         dateIso.isBlank() -> notify("請選擇日期")
                         else -> {
-                            val finalTitle = title.trim().ifBlank { category.label }
+                            val finalTitle = title.trim().ifBlank { "支出" }
                             val occurredAt = Dates.toMillisNoon(dateIso) ?: System.currentTimeMillis()
                             if (editing && expenseId != null) {
                                 vm.updateExpense(
@@ -251,7 +245,7 @@ fun AddExpenseScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(280.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

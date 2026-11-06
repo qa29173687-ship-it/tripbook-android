@@ -43,7 +43,7 @@ fun MembersScreen(
 
     Scaffold(
         containerColor = Cream,
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         topBar = {
             TopAppBar(
                 title = { Text("旅伴與現金", fontWeight = FontWeight.Black) },

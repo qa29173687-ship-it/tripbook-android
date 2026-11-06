@@ -25,7 +25,7 @@ fun SettingsScreen(vm: TripViewModel) {
         SoftCard {
             Text("關於旅伴帳", fontWeight = FontWeight.Black)
             Spacer(Modifier.height(6.dp))
-            Text("版本 1.0.0\n出遊分帳，一筆算清楚。\n離線記帳 · 現金流水 · 最少轉帳結算", color = InkSoft, fontSize = 13.sp, lineHeight = 20.sp)
+            Text("版本 1.0.5\n出遊分帳，一筆算清楚。\n離線記帳 · 現金流水 · 最少轉帳結算", color = InkSoft, fontSize = 13.sp, lineHeight = 20.sp)
         }
         Spacer(Modifier.height(16.dp))
         Text("刪除行程", fontWeight = FontWeight.Bold, color = InkSoft)

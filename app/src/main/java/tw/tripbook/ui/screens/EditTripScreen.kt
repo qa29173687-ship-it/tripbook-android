@@ -60,7 +60,7 @@ fun EditTripScreen(
 
     Scaffold(
         containerColor = Cream,
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
@@ -178,7 +178,7 @@ fun EditTripScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(280.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 
