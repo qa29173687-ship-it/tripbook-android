@@ -298,6 +298,83 @@ class Repository(private val db: AppDatabase) {
         expenses.delete(expenseId)
     }
 
+    /**
+     * 已當場還錢: rewrite the helper-pay expense so B is the payer (and only share),
+     * clearing the debt in 分帳. Cash: if repaid in CASH, credit the original payer and
+     * debit B; if repaid by TRANSFER, leave cash as-is (A's store cash spend stays deducted).
+     * Idempotent if already settled this way.
+     */
+    suspend fun settleHelperRepay(
+        expenseId: Long, newPayerId: Long, repayMethod: PaymentMethod,
+        originalPayerName: String, newPayerName: String
+    ): Boolean {
+        val old = expenses.get(expenseId) ?: return false
+        val splits = expenses.splitsFor(expenseId)
+        val already = old.payerMemberId == newPayerId && splits.size == 1 && splits.first().memberId == newPayerId
+        if (already) return false
+        val amount = old.amountCents
+        val oldPayer = old.payerMemberId
+        rewriteExpensePayer(
+            old, newPayerId, repayMethod, listOf(newPayerId),
+            note = "已當場還錢（$originalPayerName 幫 $newPayerName）"
+        )
+        if (repayMethod == PaymentMethod.CASH && oldPayer != newPayerId && amount > 0) {
+            moveMemberCash(oldPayer, CashDirection.IN, amount, "當場還錢：${old.title}", expenseId, CashKind.EXPENSE_REVERSE)
+            moveMemberCash(newPayerId, CashDirection.OUT, amount, "分帳：${old.title}", expenseId, CashKind.EXPENSE)
+        }
+        return true
+    }
+
+    /** 取消已還: restore payer = A, share = B, original method, and reverse repay cash. */
+    suspend fun undoHelperRepay(
+        expenseId: Long, originalPayerId: Long, originalMethod: PaymentMethod,
+        shareMemberId: Long, originalTitle: String
+    ): Boolean {
+        val old = expenses.get(expenseId) ?: return false
+        val splits = expenses.splitsFor(expenseId)
+        val already = old.payerMemberId == originalPayerId && splits.any { it.memberId == shareMemberId } &&
+            splits.size == 1 && old.paymentMethod == originalMethod.name
+        if (already) return false
+        val amount = old.amountCents
+        val repayMethod = runCatching { PaymentMethod.valueOf(old.paymentMethod) }.getOrDefault(PaymentMethod.TRANSFER)
+        if (repayMethod == PaymentMethod.CASH && originalPayerId != shareMemberId && amount > 0) {
+            moveMemberCash(originalPayerId, CashDirection.OUT, amount, "取消當場還錢：${old.title}", expenseId, CashKind.EXPENSE)
+            moveMemberCash(shareMemberId, CashDirection.IN, amount, "取消當場還錢：${old.title}", expenseId, CashKind.EXPENSE_REVERSE)
+        }
+        val note = if (old.note.startsWith("已當場還錢")) "" else old.note
+        rewriteExpensePayer(old, originalPayerId, originalMethod, listOf(shareMemberId), title = originalTitle, note = note)
+        return true
+    }
+
+    private suspend fun rewriteExpensePayer(
+        old: tw.tripbook.data.ExpenseEntity, newPayerId: Long, newMethod: PaymentMethod,
+        participantIds: List<Long>, title: String = old.title, note: String = old.note
+    ) {
+        val effective = if (newMethod == PaymentMethod.POOL) PaymentMethod.CASH else newMethod
+        expenses.deleteSplits(old.id)
+        expenses.update(old.copy(payerMemberId = newPayerId, paymentMethod = effective.name, title = title, note = note))
+        val splits = SplitMath.equalSplit(old.amountCents, participantIds)
+        expenses.insertSplits(splits.map { ExpenseSplitEntity(old.id, it.memberId, it.amountCents) })
+    }
+
+    private suspend fun moveMemberCash(
+        memberId: Long, direction: CashDirection, amountCents: Long,
+        note: String, expenseId: Long, kind: CashKind
+    ) {
+        val m = members.get(memberId) ?: return
+        val next = when (direction) {
+            CashDirection.IN -> CashLedger.credit(m.cashCents, amountCents)
+            CashDirection.OUT -> CashLedger.debit(m.cashCents, amountCents)
+        }
+        members.update(m.copy(cashCents = next))
+        cash.insert(
+            CashMovementEntity(
+                tripId = m.tripId, memberId = memberId, direction = direction.name, kind = kind.name,
+                amountCents = amountCents, note = note, relatedExpenseId = expenseId
+            )
+        )
+    }
+
     // ---- 我要買 ----
     fun observeShopping(tripId: Long) = shopping.observeForTrip(tripId)
 

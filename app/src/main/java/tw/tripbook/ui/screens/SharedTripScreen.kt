@@ -37,14 +37,21 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
     val trip by remember(cloudId) { Cloud.tripFlow(cloudId) }.collectAsStateWithLifecycle(null)
     val exps by remember(cloudId) { Cloud.expensesFlow(cloudId) }.collectAsStateWithLifecycle(emptyList())
     val inbox by remember(cloudId) { Cloud.inboxFlow(cloudId) }.collectAsStateWithLifecycle(emptyList())
+    val shopItems by remember(cloudId) { Cloud.itemsFlow(cloudId) }.collectAsStateWithLifecycle(emptyList())
     var tab by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(Unit) { runCatching { Cloud.ensureSignedIn() } }
     if (j == null) { LaunchedEffect(Unit) { onBack() }; return }
     val members = trip?.members.orEmpty()
     val currency = trip?.currency ?: "TWD"
-    val sum = SharedView.summary(j.memberId, members, exps, Cloud.pendingOf(inbox))
+    val repaid = Cloud.repaidOf(shopItems)
+    val books = SharedView.resolve(exps, Cloud.pendingOf(inbox), repaid)
+    val sum = SharedView.summary(j.memberId, members, exps, Cloud.pendingOf(inbox), repaid)
     val ownerName = trip?.ownerName?.ifBlank { null } ?: "主帳號"
     val nameOf = { id: String -> members.firstOrNull { it.id == id }?.name ?: "?" }
+    val expTitle = { e: tw.tripbook.domain.CExpense ->
+        val r = repaid.firstOrNull { it.expenseId == e.id }
+        if (r != null) SharedView.repaidLine(r.payerName, r.forName, e.title) else e.title
+    }
 
     Scaffold(
         containerColor = Cream,
@@ -88,8 +95,8 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                 )
             } else if (tab == 2) {
                 val fmt2 = DateTimeFormatter.ofPattern("M/d").withZone(ZoneId.of("Asia/Taipei"))
-                val all = SharedView.transfers(members, exps)
-                val pend = Cloud.pendingOf(inbox)
+                val all = SharedView.transfers(members, books.expenses)
+                val pend = books.pending
                 LazyColumn(
                     Modifier.weight(1f).padding(horizontal = 16.dp),
                     contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -103,7 +110,7 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text("總消費明細", fontWeight = FontWeight.Black)
                             members.forEach { m ->
-                                val sp = exps.sumOf { it.shares[m.id] ?: 0L }
+                                val sp = books.expenses.sumOf { it.shares[m.id] ?: 0L }
                                 Row(Modifier.fillMaxWidth()) {
                                     Text(m.name, Modifier.weight(1f), fontSize = 14.sp)
                                     Text(Money.format(sp, currency), fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -114,15 +121,15 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                     if (pend.isNotEmpty()) item { Text("等${ownerName}的手機記帳", color = PeachDeep, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                     items(pend) { p ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PeachSoft).padding(14.dp)) {
-                            Text(if (p.forId != p.memberId) "${nameOf(p.memberId)} 幫 ${nameOf(p.forId)} · ${p.title}" else "${nameOf(p.memberId)} · ${p.title}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                            Text(p.repaidLabel ?: if (p.forId != p.memberId) "${nameOf(p.memberId)} 幫 ${nameOf(p.forId)} · ${p.title}" else "${nameOf(p.memberId)} · ${p.title}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                             Text(Money.format(p.amountCents, currency), fontWeight = FontWeight.Black)
                         }
                     }
                     item { Text("全部支出", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-                    items(exps.sortedByDescending { it.at }, key = { "a" + it.id }) { e ->
+                    items(books.expenses.sortedByDescending { it.at }, key = { "a" + it.id }) { e ->
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp)) {
                             Row {
-                                Text(e.title, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                                Text(expTitle(e), Modifier.weight(1f), fontWeight = FontWeight.Bold)
                                 Text(Money.format(e.amountCents, currency), fontWeight = FontWeight.Black)
                             }
                             val method = when (e.method) { "CASH" -> "現金"; "CARD" -> "刷卡"; "TRANSFER" -> "轉帳"; else -> "" }
@@ -163,6 +170,7 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                                 Text(p.title, fontWeight = FontWeight.Bold)
                                 Text(
                                     when {
+                                        p.repaidLabel != null -> "${p.repaidLabel} · ${if (p.method == "CASH") "現金" else "轉帳"}"
                                         p.memberId == j.memberId && p.forId == j.memberId -> "我付 · ${if (p.method == "CASH") "現金" else "信用卡"} · 只算我"
                                         p.memberId == j.memberId -> "我幫${nameOf(p.forId)}付 · ${if (p.method == "CASH") "現金" else "信用卡"} · 算他的"
                                         else -> "${nameOf(p.memberId)} 幫我付 · 算我的，要還他"
@@ -181,7 +189,7 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(e.title, fontWeight = FontWeight.Bold)
+                                Text(expTitle(e), fontWeight = FontWeight.Bold)
                                 val who = if (e.payerId == j.memberId) "我付" else "${nameOf(e.payerId)} 付"
                                 val method = when (e.method) { "CASH" -> "現金"; "CARD" -> "刷卡"; "TRANSFER" -> "轉帳"; else -> "" }
                                 Text(

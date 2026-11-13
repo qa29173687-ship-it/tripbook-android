@@ -63,7 +63,8 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
         val payer: String,
         val splitters: String,
         val method: PaymentMethod,
-        val share: Long
+        val share: Long,
+        val note: String = ""
     )
     var rows by remember { mutableStateOf<List<ExpRow>>(emptyList()) }
     LaunchedEffect(exps, mems) {
@@ -80,7 +81,8 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                 payer = payer,
                 splitters = names.joinToString("、"),
                 method = method,
-                share = SplitMath.perPersonShare(e.amountCents, names.size.coerceAtLeast(1))
+                share = SplitMath.perPersonShare(e.amountCents, names.size.coerceAtLeast(1)),
+                note = e.note
             )
         }
         rows = built
@@ -97,7 +99,7 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
             appendLine("—")
             appendLine("總消費明細：")
             rows.forEach { r ->
-                appendLine("· ${r.title} ${Money.format(r.amount, currency)}｜${r.payer}付｜${r.splitters}｜${r.method.label}")
+                appendLine("· ${r.title} ${Money.format(r.amount, currency)}｜${r.payer}付｜${r.splitters}｜${r.method.label}" + if (r.note.startsWith("已當場還錢")) "｜已還" else "")
             }
         }
     }
@@ -163,7 +165,7 @@ fun SettleScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                     Row {
                         Column(Modifier.weight(1f)) {
                             Text(r.title, fontWeight = FontWeight.Black)
-                            Text("${r.payer} 付 · ${r.method.label}", color = InkSoft, fontSize = 12.sp)
+                            Text("${r.payer} 付 · ${r.method.label}" + if (r.note.startsWith("已當場還錢")) " · ${r.note}" else "", color = InkSoft, fontSize = 12.sp)
                             if (r.splitters.isNotEmpty()) {
                                 Text(r.splitters, color = InkSoft, fontSize = 12.sp)
                             }

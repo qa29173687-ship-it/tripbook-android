@@ -144,11 +144,52 @@ class OwnerSync(private val repo: Repository, private val store: ShareStore, pri
                 it + (localId to "$who ${m.title} ${Money.format(m.amountCents, cur)}" +
                     "${if (method == PaymentMethod.CASH) " 現金" else " 信用卡"}，已記帳")
             }
+            // If 已當場還錢 was already marked on the item, settle now so a later repay inbox is a no-op.
+            val fresh = runCatching { Cloud.parseItem(itemRef.get().await()) }.getOrNull()
+            if (fresh?.paidBy?.repaid == true) applyRepay(localId, fresh)
         } else if (m.type == "unbuy") {
             oldExp?.let { repo.deleteExpense(it) }
             if (item != null) itemRef.update(mapOf("expenseId" to null, "done" to false, "amount" to 0L)).await()
+        } else if (m.type == "repay") {
+            val fresh = item ?: runCatching { Cloud.parseItem(itemRef.get().await()) }.getOrNull()
+            if (applyRepay(localId, fresh)) {
+                val cur = repo.getTrip(localId)?.currency ?: "TWD"
+                val pb = fresh?.paidBy
+                val a = pb?.name ?: m.memberName
+                val b = fresh?.memberName ?: mems.firstOrNull { it.id == forId }?.name.orEmpty()
+                val how = if (m.method == "CASH") "現金" else "轉帳"
+                notices.update {
+                    it + (localId to "$b 已當場還錢給 $a（${m.title} ${Money.format(m.amountCents, cur)} · $how）")
+                }
+            }
+        } else if (m.type == "unrepay") {
+            val fresh = item ?: runCatching { Cloud.parseItem(itemRef.get().await()) }.getOrNull()
+            if (applyUnrepay(localId, fresh)) {
+                notices.update { it + (localId to "已取消「已當場還錢」（${m.title}）") }
+            }
         }
         Cloud.trip(cloudId).collection("inbox").document(m.id).delete().await()
+    }
+
+    /** Convert a recorded helper-pay expense into B-bought-it-themselves after 已當場還錢. */
+    private suspend fun applyRepay(localId: Long, item: CItem?): Boolean {
+        val pb = item?.paidBy ?: return false
+        val expId = item.expenseId?.toLongOrNull() ?: return false
+        val forId = localMemberId(localId, item.memberId) ?: return false
+        val repay = runCatching { PaymentMethod.valueOf(pb.repaidMethod.ifBlank { "CASH" }) }
+            .getOrDefault(PaymentMethod.CASH)
+            .let { if (it == PaymentMethod.CASH) it else PaymentMethod.TRANSFER }
+        return repo.settleHelperRepay(expId, forId, repay, pb.name, item.memberName)
+    }
+
+    private suspend fun applyUnrepay(localId: Long, item: CItem?): Boolean {
+        val pb = item?.paidBy ?: return false
+        val expId = item.expenseId?.toLongOrNull() ?: return false
+        val forId = localMemberId(localId, item.memberId) ?: return false
+        val payerId = localMemberId(localId, pb.memberId) ?: return false
+        val method = runCatching { PaymentMethod.valueOf(pb.method) }.getOrDefault(PaymentMethod.CASH)
+        val title = ShoppingText.expenseTitle(item.name, item.qty)
+        return repo.undoHelperRepay(expId, payerId, method, forId, title)
     }
 
     /** Cloud id used for a local member (identity unless this trip was restored on a new phone). */

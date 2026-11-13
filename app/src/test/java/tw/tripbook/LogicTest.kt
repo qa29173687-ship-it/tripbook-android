@@ -258,4 +258,115 @@ class LogicTest {
         val t = tw.tripbook.domain.SharedView.transfers(ms, listOf(e))
         org.junit.Assert.assertEquals(listOf(tw.tripbook.domain.CTransfer("2", "1", 800)), t)
     }
+
+
+    @Test
+    fun repayCashClearsDebtAndMovesCash() {
+        val ms = listOf(
+            CMember("1", "宏威", 10000, 9200, true),  // already ingested: A paid 800 cash
+            CMember("2", "小美", 5000, 5000, false)
+        )
+        val e = CExpense("9", "藥妝", 800, "1", "CASH", 0, mapOf("2" to 800L))
+        val before = SharedView.transfers(ms, listOf(e))
+        assertEquals(listOf(CTransfer("2", "1", 800)), before)
+        val repaid = listOf(
+            CRepaidItem("i", "9", "1", "宏威", "2", "小美", "藥妝", 800, "CASH", "CASH")
+        )
+        val s1 = SharedView.summary("1", ms, listOf(e), emptyList(), repaid)
+        val s2 = SharedView.summary("2", ms, listOf(e), emptyList(), repaid)
+        assertEquals(10000L, s1.remainingCash) // 9200 + 800
+        assertEquals(0L, s1.spent)
+        assertEquals(4200L, s2.remainingCash) // 5000 - 800
+        assertEquals(800L, s2.spent)
+        assertTrue(s1.transfers.isEmpty())
+        assertTrue(s2.transfers.isEmpty())
+        val books = SharedView.resolve(listOf(e), emptyList(), repaid)
+        assertEquals(emptyList<CTransfer>(), SharedView.transfers(ms, books.expenses))
+        assertEquals("2", books.expenses.single().payerId)
+        assertEquals("CASH", books.expenses.single().method)
+        assertEquals(mapOf("2" to 800L), books.expenses.single().shares)
+        assertEquals("宏威 幫 小美 · 藥妝 · 已還", SharedView.repaidLine("宏威", "小美", "藥妝"))
+        assertEquals("已還 💵", SharedView.repaidTag("CASH"))
+        assertEquals("已還（轉帳）", SharedView.repaidTag("TRANSFER"))
+    }
+
+    @Test
+    fun repayTransferKeepsHelpersCashIfTheyPaidCash() {
+        val ms = listOf(
+            CMember("1", "宏威", 10000, 9200, true),
+            CMember("2", "小美", 5000, 5000, false)
+        )
+        val e = CExpense("9", "藥妝", 800, "1", "CASH", 0, mapOf("2" to 800L))
+        val repaid = listOf(
+            CRepaidItem("i", "9", "1", "宏威", "2", "小美", "藥妝", 800, "CASH", "TRANSFER")
+        )
+        val s1 = SharedView.summary("1", ms, listOf(e), emptyList(), repaid)
+        val s2 = SharedView.summary("2", ms, listOf(e), emptyList(), repaid)
+        assertEquals(9200L, s1.remainingCash) // cash stays deducted
+        assertEquals(0L, s1.spent)
+        assertEquals(5000L, s2.remainingCash)
+        assertEquals(800L, s2.spent)
+        assertTrue(s1.transfers.isEmpty())
+        val books = SharedView.resolve(listOf(e), emptyList(), repaid)
+        assertEquals("TRANSFER", books.expenses.single().method)
+        assertEquals("2", books.expenses.single().payerId)
+    }
+
+    @Test
+    fun repayCashBeforeIngestAdjustsPending() {
+        val ms = listOf(
+            CMember("1", "宏威", 10000, 10000, true),
+            CMember("2", "小美", 5000, 5000, false)
+        )
+        val pend = listOf(CPending("1", "藥妝", 800, "CASH", 0, forId = "2", itemId = "i"))
+        val repaid = listOf(
+            CRepaidItem("i", null, "1", "宏威", "2", "小美", "藥妝", 800, "CASH", "CASH")
+        )
+        val s1 = SharedView.summary("1", ms, emptyList(), pend, repaid)
+        val s2 = SharedView.summary("2", ms, emptyList(), pend, repaid)
+        assertEquals(10000L, s1.remainingCash)
+        assertEquals(0L, s1.spent)
+        assertEquals(4200L, s2.remainingCash)
+        assertEquals(800L, s2.spent)
+        assertEquals(1, s2.pending.size)
+        assertEquals("宏威 幫 小美 · 藥妝 · 已還", s2.pending.single().repaidLabel)
+        assertTrue(s1.transfers.isEmpty())
+    }
+
+    @Test
+    fun repayTransferBeforeIngestKeepsHelpersCashDown() {
+        val ms = listOf(
+            CMember("1", "宏威", 10000, 10000, true),
+            CMember("2", "小美", 5000, 5000, false)
+        )
+        val pend = listOf(CPending("1", "藥妝", 800, "CASH", 0, forId = "2", itemId = "i"))
+        val repaid = listOf(
+            CRepaidItem("i", null, "1", "宏威", "2", "小美", "藥妝", 800, "CASH", "TRANSFER")
+        )
+        val s1 = SharedView.summary("1", ms, emptyList(), pend, repaid)
+        val s2 = SharedView.summary("2", ms, emptyList(), pend, repaid)
+        assertEquals(9200L, s1.remainingCash)
+        assertEquals(0L, s1.spent)
+        assertEquals(5000L, s2.remainingCash)
+        assertEquals(800L, s2.spent)
+    }
+
+    @Test
+    fun repayCardThenCashCreditsHelper() {
+        // A paid CARD (cash unchanged at 10000), expense ingested; B repays CASH
+        val ms = listOf(
+            CMember("1", "宏威", 10000, 10000, true),
+            CMember("2", "小美", 5000, 5000, false)
+        )
+        val e = CExpense("9", "藥妝", 800, "1", "CARD", 0, mapOf("2" to 800L))
+        val repaid = listOf(
+            CRepaidItem("i", "9", "1", "宏威", "2", "小美", "藥妝", 800, "CARD", "CASH")
+        )
+        val s1 = SharedView.summary("1", ms, listOf(e), emptyList(), repaid)
+        val s2 = SharedView.summary("2", ms, listOf(e), emptyList(), repaid)
+        assertEquals(10800L, s1.remainingCash) // received cash
+        assertEquals(4200L, s2.remainingCash)
+        assertEquals(800L, s2.spent)
+        assertTrue(SharedView.transfers(ms, SharedView.resolve(listOf(e), emptyList(), repaid).expenses).isEmpty())
+    }
 }

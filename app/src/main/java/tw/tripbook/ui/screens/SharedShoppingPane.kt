@@ -36,6 +36,7 @@ import tw.tripbook.cloud.CItem
 import tw.tripbook.cloud.Cloud
 import tw.tripbook.domain.CMember
 import tw.tripbook.domain.PaymentMethod
+import tw.tripbook.domain.SharedView
 import tw.tripbook.domain.ShoppingText
 import tw.tripbook.ui.components.*
 import tw.tripbook.ui.theme.*
@@ -57,6 +58,7 @@ fun SharedShoppingPane(
     currency: String,
     onBuy: suspend (CItem, Long, PaymentMethod) -> Unit,
     onUnbuy: suspend (CItem) -> Unit,
+    isOwner: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val items by remember(cloudId) { Cloud.itemsFlow(cloudId) }.collectAsStateWithLifecycle(emptyList())
@@ -68,6 +70,8 @@ fun SharedShoppingPane(
     var buying by remember { mutableStateOf<CItem?>(null) }
     var helperBuying by remember { mutableStateOf<CItem?>(null) }
     var helperUntick by remember { mutableStateOf<CItem?>(null) }
+    var repaying by remember { mutableStateOf<CItem?>(null) }
+    var unpaying by remember { mutableStateOf<CItem?>(null) }
     var unticking by remember { mutableStateOf<CItem?>(null) }
     var editing by remember { mutableStateOf<CItem?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
@@ -141,7 +145,9 @@ fun SharedShoppingPane(
                         onEdit = { if (own) editing = it },
                         onPhoto = { p -> viewing = p },
                         onHelp = { status -> run { Cloud.setHelp(cloudId, it.id, myName, status) } },
-                        onPayFor = { if (!busy) { if (uid != null && it.helpers[uid]?.status == "PAID") helperUntick = it else helperBuying = it } }
+                        onPayFor = { if (!busy) { if (uid != null && it.helpers[uid]?.status == "PAID") helperUntick = it else helperBuying = it } },
+                        onRepay = { if (!busy) { if (it.paidBy?.repaid == true) unpaying = it else repaying = it } },
+                        isOwner = isOwner, myMemberId = myMemberId
                     )
                 }
             }
@@ -194,21 +200,34 @@ fun SharedShoppingPane(
     }
 
     helperUntick?.let { item ->
-
         AlertDialog(
-
             onDismissRequest = { helperUntick = null },
-
             title = { Text("取消幫買？") },
-
             text = { Text("會刪掉這筆幫${item.memberName}代墊的支出。") },
-
             confirmButton = { TextButton(onClick = { helperUntick = null; run { Cloud.helperUnbuy(cloudId, item, myMemberId, myName) } }) { Text("取消幫買", color = PeachDeep) } },
-
             dismissButton = { TextButton(onClick = { helperUntick = null }) { Text("保留") } }
-
         )
-
+    }
+    repaying?.let { item ->
+        CloudRepayDialog(
+            item, myMemberId, currency,
+            onDismiss = { repaying = null }
+        ) { method ->
+            repaying = null
+            run { Cloud.helperRepay(cloudId, item, myName, method.name) }
+        }
+    }
+    unpaying?.let { item ->
+        val pb = item.paidBy
+        val a = if (pb != null && uid != null && item.helpers[uid]?.status == "PAID") "你" else (pb?.name ?: "代墊的人")
+        val b = if (item.memberId == myMemberId) "你" else item.memberName
+        AlertDialog(
+            onDismissRequest = { unpaying = null },
+            title = { Text("取消已還？") },
+            text = { Text("會恢復成分帳裡${b}欠${a}，現金也改回去。") },
+            confirmButton = { TextButton(onClick = { unpaying = null; run { Cloud.helperUnrepay(cloudId, item, myName) } }) { Text("取消已還", color = PeachDeep) } },
+            dismissButton = { TextButton(onClick = { unpaying = null }) { Text("保留") } }
+        )
     }
 
     buying?.let { item ->
@@ -275,7 +294,8 @@ private fun B64Viewer(b64: String, onClose: () -> Unit) {
 private fun CloudRow(
     item: CItem, own: Boolean, myUid: String?, currency: String,
     onCheck: () -> Unit, onEdit: () -> Unit, onPhoto: (String) -> Unit, onHelp: (String?) -> Unit,
-    onPayFor: () -> Unit = {}
+    onPayFor: () -> Unit = {}, onRepay: () -> Unit = {},
+    isOwner: Boolean = false, myMemberId: String = ""
 ) {
     SoftCard(Modifier.clickable(onClick = onEdit)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -304,8 +324,9 @@ private fun CloudRow(
                 if (item.note.isNotBlank()) Text(item.note, color = InkSoft, fontSize = 12.sp)
                 item.paidBy?.let { pb ->
                     val by = if (myUid != null && item.helpers[myUid]?.status == "PAID") "我" else pb.name
+                    val extra = if (pb.repaid) " · ${SharedView.repaidTag(pb.repaidMethod)}" else " · 分帳自動算"
                     Text(
-                        "💰 $by 幫${if (own) "你" else item.memberName}買了 ${Money.format(pb.amountCents, currency)}（${if (pb.method == "CASH") "現金" else "信用卡"}）· 分帳自動算",
+                        "💰 $by 幫${if (own) "你" else item.memberName}買了 ${Money.format(pb.amountCents, currency)}（${if (pb.method == "CASH") "現金" else "信用卡"}）$extra",
                         color = MintDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold
                     )
                 }
@@ -322,8 +343,13 @@ private fun CloudRow(
                 }
             }
             val myStatus = myUid?.let { item.helpers[it]?.status }
-            if (!own && myStatus == "PAID") {
-                SmallTag("取消幫買", false, onPayFor)
+            val canRepay = item.paidBy != null && (isOwner || own || myStatus == "PAID")
+            if (canRepay) {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (item.paidBy?.repaid == true) SmallTag("取消已還", false, onRepay)
+                    else SmallTag("已當場還錢", false, onRepay)
+                    if (myStatus == "PAID") SmallTag("取消幫買", false, onPayFor)
+                }
             } else if (!own && !item.bought) {
                 val mine = myStatus
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -377,6 +403,42 @@ private fun CloudBoughtDialog(
             TextButton(enabled = amount > 0, onClick = { onConfirm(amount, method) }) {
                 Text("打勾並記帳", color = if (amount > 0) MintDeep else InkSoft, fontWeight = FontWeight.Bold)
             }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun CloudRepayDialog(
+    item: CItem, myMemberId: String, currency: String,
+    onDismiss: () -> Unit, onConfirm: (PaymentMethod) -> Unit
+) {
+    var method by remember { mutableStateOf(PaymentMethod.CASH) }
+    val pb = item.paidBy
+    val a = if (pb != null && pb.memberId == myMemberId) "你" else (pb?.name ?: "代墊的人")
+    val b = if (item.memberId == myMemberId) "你" else item.memberName
+    val amt = Money.format(pb?.amountCents ?: item.amountCents, currency)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("已當場還錢？", fontWeight = FontWeight.Black) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("「${item.name}」$amt，${b}已經還給${a}了？選還錢方式：")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill("現金", method == PaymentMethod.CASH, mint = false) { method = PaymentMethod.CASH }
+                    Pill("其他如轉帳", method == PaymentMethod.TRANSFER, mint = false) { method = PaymentMethod.TRANSFER }
+                }
+                if (method == PaymentMethod.CASH) Text(
+                    "${a}的剩餘現金會加回，$b 的剩餘現金會扣掉，分帳不再算欠款",
+                    color = MintDeep, fontWeight = FontWeight.Bold, fontSize = 13.sp
+                ) else Text(
+                    "分帳不再算欠款。用轉帳還的話，兩人剩餘現金不變（當初付現的話，代墊的現金維持已扣）",
+                    color = InkSoft, fontSize = 13.sp
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(method) }) { Text("已當場還錢", color = MintDeep, fontWeight = FontWeight.Bold) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )

@@ -33,7 +33,7 @@ fun SettingsScreen(vm: TripViewModel, onOpenTrip: (Long) -> Unit = {}) {
         SoftCard {
             Text("關於旅伴帳", fontWeight = FontWeight.Black)
             Spacer(Modifier.height(6.dp))
-            Text("版本 1.1.2\n出遊分帳，一筆算清楚。\n旅伴共享 · 離線記帳 · 現金流水 · 最少轉帳結算", color = InkSoft, fontSize = 13.sp, lineHeight = 20.sp)
+            Text("版本 1.1.3\n出遊分帳，一筆算清楚。\n旅伴共享 · 離線記帳 · 現金流水 · 最少轉帳結算", color = InkSoft, fontSize = 13.sp, lineHeight = 20.sp)
         }
         Spacer(Modifier.height(12.dp))
         SoftCard {

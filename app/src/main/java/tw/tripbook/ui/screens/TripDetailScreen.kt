@@ -132,6 +132,7 @@ fun TripDetailScreen(
                 myCash = me.cashCents, myStartCash = me.startingCashCents, currency = currency,
                 onBuy = { item, amount, method -> vm.ownerSync.ownerBuy(tripId, cloudId, item, amount, method) },
                 onUnbuy = { item -> vm.ownerSync.ownerUnbuy(cloudId, item) },
+                isOwner = true,
                 modifier = Modifier.weight(1f)
             )
         } else if (tab == 1) {

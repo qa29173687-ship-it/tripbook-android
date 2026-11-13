@@ -25,6 +25,8 @@ import kotlinx.coroutines.tasks.await
 import tw.tripbook.domain.CExpense
 import tw.tripbook.domain.CMember
 import tw.tripbook.domain.CPending
+import tw.tripbook.domain.CRepaidItem
+import tw.tripbook.domain.ShoppingText
 import tw.tripbook.util.PhotoStore
 import java.io.ByteArrayOutputStream
 
@@ -33,7 +35,10 @@ data class CTrip(
     val inviteCode: String, val startDate: String, val endDate: String, val members: List<CMember>
 )
 
-data class CHelper(val name: String, val status: String, val amountCents: Long = 0, val method: String = "CASH") // FIND 我幫你找, SEEN 我看到了, PAID 我幫你買了
+data class CHelper(
+    val name: String, val status: String, val amountCents: Long = 0, val method: String = "CASH",
+    val memberId: String = "", val repaid: Boolean = false, val repaidMethod: String = ""
+) // FIND 我幫你找, SEEN 我看到了, PAID 我幫你買了；repaid = 已當場還錢
 
 data class CItem(
     val id: String, val ownerUid: String, val memberId: String, val memberName: String,
@@ -120,7 +125,10 @@ object Cloud {
             .mapValues {
                 CHelper(
                     it.value["name"]?.toString().orEmpty(), it.value["status"]?.toString() ?: "FIND",
-                    (it.value["amount"] as? Number)?.toLong() ?: 0L, it.value["method"]?.toString() ?: "CASH"
+                    (it.value["amount"] as? Number)?.toLong() ?: 0L, it.value["method"]?.toString() ?: "CASH",
+                    it.value["memberId"]?.toString().orEmpty(),
+                    it.value["repaid"] == true,
+                    it.value["repaidMethod"]?.toString().orEmpty()
                 )
             }
         return CItem(
@@ -140,7 +148,18 @@ object Cloud {
     )
 
     fun pendingOf(list: List<CInbox>) = list.filter { it.type == "buy" }
-        .map { CPending(it.memberId, it.title, it.amountCents, it.method, it.at, it.forMemberId) }
+        .map { CPending(it.memberId, it.title, it.amountCents, it.method, it.at, it.forMemberId, it.itemId) }
+
+    fun repaidOf(items: List<CItem>): List<CRepaidItem> = items.mapNotNull { it ->
+        val pb = it.paidBy ?: return@mapNotNull null
+        if (!pb.repaid) return@mapNotNull null
+        CRepaidItem(
+            itemId = it.id, expenseId = it.expenseId, payerId = pb.memberId, payerName = pb.name,
+            forId = it.memberId, forName = it.memberName, title = ShoppingText.expenseTitle(it.name, it.qty),
+            amountCents = pb.amountCents, originalMethod = pb.method,
+            repayMethod = pb.repaidMethod.ifBlank { "CASH" }
+        )
+    }
 
     // ---------- live flows ----------
     fun tripFlow(id: String): Flow<CTrip?> = callbackFlow {
@@ -242,6 +261,49 @@ object Cloud {
                 "byUid" to uid, "memberId" to myMemberId, "memberName" to myName, "forMemberId" to item.memberId,
                 "itemId" to item.id, "type" to "unbuy", "title" to item.name, "amount" to 0L, "method" to "CASH",
                 "at" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    /** Mark a helper-pay as 已當場還錢. Any member may call this (A, B, or the owner). */
+    suspend fun helperRepay(tripId: String, item: CItem, myName: String, repayMethod: String) {
+        val uid = user!!.uid
+        val (hUid, h) = item.helpers.entries.firstOrNull { it.value.status == "PAID" } ?: return
+        trip(tripId).collection("shopping").document(item.id).update(
+            mapOf(
+                "helpers.$hUid" to mapOf(
+                    "name" to h.name, "status" to "PAID", "amount" to h.amountCents, "method" to h.method,
+                    "memberId" to h.memberId, "repaid" to true, "repaidMethod" to repayMethod
+                ),
+                "updatedAt" to System.currentTimeMillis()
+            )
+        ).await()
+        trip(tripId).collection("inbox").add(
+            mapOf(
+                "byUid" to uid, "memberId" to h.memberId, "memberName" to myName, "forMemberId" to item.memberId,
+                "itemId" to item.id, "type" to "repay", "title" to ShoppingText.expenseTitle(item.name, item.qty),
+                "amount" to h.amountCents, "method" to repayMethod, "at" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    suspend fun helperUnrepay(tripId: String, item: CItem, myName: String) {
+        val uid = user!!.uid
+        val (hUid, h) = item.helpers.entries.firstOrNull { it.value.status == "PAID" } ?: return
+        trip(tripId).collection("shopping").document(item.id).update(
+            mapOf(
+                "helpers.$hUid" to mapOf(
+                    "name" to h.name, "status" to "PAID", "amount" to h.amountCents, "method" to h.method,
+                    "memberId" to h.memberId, "repaid" to false, "repaidMethod" to ""
+                ),
+                "updatedAt" to System.currentTimeMillis()
+            )
+        ).await()
+        trip(tripId).collection("inbox").add(
+            mapOf(
+                "byUid" to uid, "memberId" to h.memberId, "memberName" to myName, "forMemberId" to item.memberId,
+                "itemId" to item.id, "type" to "unrepay", "title" to ShoppingText.expenseTitle(item.name, item.qty),
+                "amount" to h.amountCents, "method" to h.method, "at" to System.currentTimeMillis()
             )
         ).await()
     }
