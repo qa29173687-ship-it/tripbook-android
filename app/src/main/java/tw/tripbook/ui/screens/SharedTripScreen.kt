@@ -74,6 +74,7 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
             TabRow(selectedTabIndex = tab, containerColor = Cream, contentColor = MintDeep) {
                 Tab(tab == 0, { tab = 0 }, text = { Text("我要買", fontWeight = FontWeight.Bold) })
                 Tab(tab == 1, { tab = 1 }, text = { Text("我的花費", fontWeight = FontWeight.Bold) })
+                Tab(tab == 2, { tab = 2 }, text = { Text("分帳", fontWeight = FontWeight.Bold) })
             }
             if (tab == 0) {
                 SharedShoppingPane(
@@ -85,6 +86,52 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                     onUnbuy = { item -> Cloud.companionUnbuy(cloudId, item, j.memberName) },
                     modifier = Modifier.weight(1f)
                 )
+            } else if (tab == 2) {
+                val fmt2 = DateTimeFormatter.ofPattern("M/d").withZone(ZoneId.of("Asia/Taipei"))
+                val all = SharedView.transfers(members, exps)
+                val pend = Cloud.pendingOf(inbox)
+                LazyColumn(
+                    Modifier.weight(1f).padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White).padding(16.dp)) {
+                            Text("建議轉帳", fontWeight = FontWeight.Black)
+                            if (all.isEmpty()) Text("目前不用轉帳", color = InkSoft, fontSize = 13.sp)
+                            all.forEach { Text("${nameOf(it.fromId)} → ${nameOf(it.toId)}　${Money.format(it.amountCents, currency)}", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                            Spacer(Modifier.height(8.dp))
+                            Text("總消費明細", fontWeight = FontWeight.Black)
+                            members.forEach { m ->
+                                val sp = exps.sumOf { it.shares[m.id] ?: 0L }
+                                Row(Modifier.fillMaxWidth()) {
+                                    Text(m.name, Modifier.weight(1f), fontSize = 14.sp)
+                                    Text(Money.format(sp, currency), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
+                            }
+                        }
+                    }
+                    if (pend.isNotEmpty()) item { Text("等${ownerName}的手機記帳", color = PeachDeep, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    items(pend) { p ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PeachSoft).padding(14.dp)) {
+                            Text("${nameOf(p.memberId)} · ${p.title}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                            Text(Money.format(p.amountCents, currency), fontWeight = FontWeight.Black)
+                        }
+                    }
+                    item { Text("全部支出", color = InkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    items(exps.sortedByDescending { it.at }, key = { "a" + it.id }) { e ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp)) {
+                            Row {
+                                Text(e.title, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                                Text(Money.format(e.amountCents, currency), fontWeight = FontWeight.Black)
+                            }
+                            val method = when (e.method) { "CASH" -> "現金"; "CARD" -> "刷卡"; "TRANSFER" -> "轉帳"; else -> "" }
+                            Text("${fmt2.format(Instant.ofEpochMilli(e.at))} · ${nameOf(e.payerId)} 付 · $method", color = InkSoft, fontSize = 12.sp)
+                            Text(e.shares.entries.joinToString("、") { "${nameOf(it.key)} ${Money.format(it.value, currency)}" }, color = InkSoft, fontSize = 12.sp)
+                        }
+                    }
+                    item { Text("🔒 支出和分帳由${ownerName}（主帳號）管理，只能看不能改。", color = InkSoft, fontSize = 13.sp) }
+                }
             } else {
                 val fmt = DateTimeFormatter.ofPattern("M/d").withZone(ZoneId.of("Asia/Taipei"))
                 LazyColumn(
