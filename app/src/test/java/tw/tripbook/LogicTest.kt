@@ -205,4 +205,10 @@ class LogicTest {
         assertTrue(chat.contains("總消費明細"))
         assertTrue(chat.contains("小美 轉給 宏威"))
     }
+
+    @Test fun shoppingExpenseTitle() {
+        assertEquals("白色戀人 ×3", ShoppingText.expenseTitle(" 白色戀人 ", 3))
+        assertEquals("抹茶粉", ShoppingText.expenseTitle("抹茶粉", 1))
+        assertEquals("購物", ShoppingText.expenseTitle("  ", 1))
+    }
 }

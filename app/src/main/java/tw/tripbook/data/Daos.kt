@@ -85,3 +85,19 @@ interface CashDao {
     @Query("DELETE FROM cash_movements WHERE relatedExpenseId = :expenseId")
     suspend fun deleteForExpense(expenseId: Long)
 }
+
+@Dao
+interface ShoppingDao {
+    @Query("SELECT * FROM shopping_items WHERE tripId = :tripId ORDER BY done ASC, createdAt ASC, id ASC")
+    fun observeForTrip(tripId: Long): Flow<List<ShoppingItemEntity>>
+
+    @Query("SELECT * FROM shopping_items WHERE id = :id")
+    suspend fun get(id: Long): ShoppingItemEntity?
+
+    @Insert suspend fun insert(item: ShoppingItemEntity): Long
+    @Update suspend fun update(item: ShoppingItemEntity)
+    @Query("DELETE FROM shopping_items WHERE id = :id")
+    suspend fun delete(id: Long)
+    @Query("UPDATE shopping_items SET done = 0, expenseId = NULL WHERE expenseId = :expenseId")
+    suspend fun unlinkExpense(expenseId: Long)
+}

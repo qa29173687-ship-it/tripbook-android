@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +53,7 @@ fun TripDetailScreen(
     var balances by remember { mutableStateOf<List<MemberBalance>>(emptyList()) }
     var splitNames by remember { mutableStateOf<Map<Long, List<String>>>(emptyMap()) }
     var pendingDelete by remember { mutableStateOf<ExpenseEntity?>(null) }
+    var tab by rememberSaveable { mutableStateOf(0) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(exps, mems) {
@@ -73,6 +75,7 @@ fun TripDetailScreen(
 
     Scaffold(
         containerColor = Cream,
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
@@ -95,7 +98,7 @@ fun TripDetailScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            if (tab == 0) ExtendedFloatingActionButton(
                 onClick = onAddExpense,
                 containerColor = MintDeep, contentColor = Color.White,
                 icon = { Icon(Icons.Default.Add, null) },
@@ -103,8 +106,13 @@ fun TripDetailScreen(
             )
         }
     ) { pad ->
+      Column(Modifier.fillMaxSize().padding(pad)) {
+        TripTabs(tab, onSelect = { i -> if (i == 2) onSettle() else tab = i })
+        if (tab == 1) {
+            ShoppingPane(vm, tripId, me, exps, currency, Modifier.weight(1f))
+        } else
         LazyColumn(
-            Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp),
+            Modifier.weight(1f).padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             item {
@@ -253,6 +261,7 @@ fun TripDetailScreen(
                 }
             }
         }
+      }
     }
 
     pendingDelete?.let { e ->
@@ -273,5 +282,35 @@ fun TripDetailScreen(
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } }
         )
+    }
+}
+
+@Composable
+private fun TripTabs(selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White)
+            .padding(4.dp)
+    ) {
+        listOf("支出", "我要買", "結算").forEachIndexed { i, label ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (selected == i) MintDeep else Color.White)
+                    .clickable { onSelect(i) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (selected == i) Color.White else InkSoft,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }

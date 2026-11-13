@@ -8,6 +8,7 @@ class Repository(private val db: AppDatabase) {
     private val members get() = db.members()
     private val expenses get() = db.expenses()
     private val cash get() = db.cash()
+    private val shopping get() = db.shopping()
 
     fun observeTrips(): Flow<List<TripEntity>> = trips.observeTrips()
     fun observeTrip(id: Long) = trips.observe(id)
@@ -288,10 +289,43 @@ class Repository(private val db: AppDatabase) {
 
     suspend fun deleteExpense(expenseId: Long) {
         val e = expenses.get(expenseId) ?: return
+        shopping.unlinkExpense(expenseId)
         reverseCashOnly(e)
         cash.deleteForExpense(expenseId)
         expenses.deleteSplits(expenseId)
         expenses.delete(expenseId)
+    }
+
+    // ---- 我要買 ----
+    fun observeShopping(tripId: Long) = shopping.observeForTrip(tripId)
+
+    suspend fun addShoppingItem(tripId: Long, name: String, qty: Int, note: String): Long =
+        shopping.insert(ShoppingItemEntity(tripId = tripId, name = name.trim(), qty = qty.coerceAtLeast(1), note = note.trim()))
+
+    suspend fun updateShoppingItem(id: Long, name: String, qty: Int, note: String) {
+        val it = shopping.get(id) ?: return
+        shopping.update(it.copy(name = name.trim(), qty = qty.coerceAtLeast(1), note = note.trim()))
+    }
+
+    suspend fun deleteShoppingItem(id: Long) = shopping.delete(id)
+
+    /** Bought: records a personal expense for 本人 (cash deducts remaining cash; card does not). */
+    suspend fun markBought(itemId: Long, amountCents: Long, method: PaymentMethod): Long? {
+        val item = shopping.get(itemId) ?: return null
+        val mems = members.listForTrip(item.tripId)
+        val me = mems.firstOrNull { it.isMe } ?: mems.firstOrNull() ?: return null
+        item.expenseId?.let { deleteExpense(it) }
+        val title = ShoppingText.expenseTitle(item.name, item.qty)
+        val eid = addExpense(item.tripId, title, amountCents, ExpenseCategory.SHOP, me.id, method, listOf(me.id))
+        shopping.update(item.copy(done = true, expenseId = eid))
+        return eid
+    }
+
+    /** Untick: removes the linked expense (and gives the cash back). */
+    suspend fun unmarkBought(itemId: Long) {
+        val item = shopping.get(itemId) ?: return
+        item.expenseId?.let { deleteExpense(it) }
+        shopping.get(itemId)?.let { shopping.update(it.copy(done = false, expenseId = null)) }
     }
 
     suspend fun computeBalances(tripId: Long): List<MemberBalance> {

@@ -98,3 +98,23 @@ data class CashMovementEntity(
 
 /** Draft used when creating a trip. */
 data class MemberDraft(val name: String, val startingCash: Long = 0)
+
+/** 我要買：personal pre-trip shopping list item (no price until bought). */
+@Entity(
+    tableName = "shopping_items",
+    foreignKeys = [ForeignKey(
+        entity = TripEntity::class, parentColumns = ["id"], childColumns = ["tripId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("tripId")]
+)
+data class ShoppingItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val tripId: Long,
+    val name: String,
+    val qty: Int = 1,
+    val note: String = "",
+    val done: Boolean = false,
+    val expenseId: Long? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
