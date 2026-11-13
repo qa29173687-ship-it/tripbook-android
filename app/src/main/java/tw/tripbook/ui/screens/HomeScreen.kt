@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +38,8 @@ fun HomeScreen(
 ) {
     val joined by vm.joined.collectAsStateWithLifecycle()
     val trips by vm.trips.collectAsStateWithLifecycle()
+    var leaving by remember { mutableStateOf<tw.tripbook.cloud.JoinedTrip?>(null) }
+    var deleting by remember { mutableStateOf<tw.tripbook.data.TripEntity?>(null) }
     val active = trips.count { !it.settled }
     val monthSpend = remember(trips) { mutableStateOf(0L) }
     // rough: sum from first active trip loaded lazily below
@@ -152,6 +155,9 @@ fun HomeScreen(
                             Text(j.tripName, fontWeight = FontWeight.Black, fontSize = 18.sp)
                             Text("我是${j.memberName} · 寫我要買、看我的花費", color = InkSoft, fontSize = 13.sp)
                         }
+                        IconButton(onClick = { leaving = j }) {
+                            Icon(Icons.Default.Delete, contentDescription = "刪除這趟旅行", tint = PeachDeep)
+                        }
                     }
                 }
             }
@@ -193,6 +199,9 @@ fun HomeScreen(
                                 Text("${mems.size} 人 · ${exps.size} 筆", color = InkSoft, fontSize = 13.sp)
                             }
                         }
+                        IconButton(onClick = { deleting = trip }) {
+                            Icon(Icons.Default.Delete, contentDescription = "刪除這趟旅行", tint = PeachDeep)
+                        }
                     }
                 }
             }
@@ -203,5 +212,33 @@ fun HomeScreen(
             containerColor = MintDeep, contentColor = Color.White,
             shape = RoundedCornerShape(18.dp)
         ) { Icon(Icons.Default.Add, contentDescription = "新增行程") }
+    }
+    leaving?.let { j ->
+        AlertDialog(
+            onDismissRequest = { leaving = null },
+            title = { Text("刪除這趟旅行？") },
+            text = { Text("確定要從你的清單刪除這趟旅行？不會影響主帳號和其他旅伴的資料，之後可用邀請碼重新加入。") },
+            confirmButton = {
+                TextButton(onClick = { vm.leaveShared(j.cloudId); leaving = null }) { Text("刪除這趟旅行", color = PeachDeep) }
+            },
+            dismissButton = { TextButton(onClick = { leaving = null }) { Text("取消") } }
+        )
+    }
+    deleting?.let { t ->
+        val shared = vm.cloudIdFor(t.id) != null
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("確定刪除「${t.name}」？") },
+            text = {
+                Text(
+                    if (shared) "這會刪掉這支手機上的行程、支出和現金流水。雲端那份還在，旅伴還看得到，之後可在設定用同一個 Google 還原回來。"
+                    else "行程、支出、現金流水都會刪掉，無法復原。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteTrip(t.id); deleting = null }) { Text("刪除", color = PeachDeep) }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } }
+        )
     }
 }

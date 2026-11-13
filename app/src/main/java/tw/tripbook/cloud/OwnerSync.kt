@@ -31,6 +31,11 @@ class OwnerSync(private val repo: Repository, private val store: ShareStore, pri
         store.ownedAll().forEach { (local, cloud) -> start(local, cloud) }
     }
 
+    fun stop(localId: Long) {
+        jobs.remove(localId)?.cancel()
+        notices.update { it - localId }
+    }
+
     fun start(localId: Long, cloudId: String) {
         if (jobs[localId]?.isActive == true) return
         jobs[localId] = scope.launch {

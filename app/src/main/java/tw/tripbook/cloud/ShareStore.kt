@@ -12,6 +12,8 @@ class ShareStore(ctx: Context) {
 
     fun ownedCloudId(localTripId: Long): String? = sp.getString("own_$localTripId", null)
     fun setOwned(localTripId: Long, cloudId: String) = sp.edit().putString("own_$localTripId", cloudId).apply()
+    /** Drop the local↔cloud link so this phone no longer syncs the trip; does not touch Firestore. */
+    fun clearOwned(localTripId: Long) = sp.edit().remove("own_$localTripId").remove("map_$localTripId").apply()
     fun ownedAll(): Map<Long, String> = sp.all.filterKeys { it.startsWith("own_") }
         .mapNotNull { (k, v) -> k.removePrefix("own_").toLongOrNull()?.let { id -> (v as? String)?.let { id to it } } }
         .toMap()

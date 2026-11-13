@@ -17,6 +17,11 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     fun cloudIdFor(tripId: Long) = shareStore.ownedCloudId(tripId)
     suspend fun share(tripId: Long): String = ownerSync.share(tripId)
     fun refreshJoined() { joined.value = shareStore.joined() }
+    /** Remove a companion-joined trip from this phone's list only; does not touch Firestore. */
+    fun leaveShared(cloudId: String) {
+        shareStore.removeJoined(cloudId)
+        refreshJoined()
+    }
 
     val trips: StateFlow<List<TripEntity>> =
         repo.observeTrips().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -109,7 +114,11 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     fun unmarkBought(itemId: Long) = viewModelScope.launch { repo.unmarkBought(itemId) }
 
     fun markSettled(tripId: Long, settled: Boolean) = viewModelScope.launch { repo.markSettled(tripId, settled) }
-    fun deleteTrip(id: Long) = viewModelScope.launch { repo.deleteTrip(id) }
+    fun deleteTrip(id: Long) = viewModelScope.launch {
+        ownerSync.stop(id)
+        shareStore.clearOwned(id) // keep the cloud copy; it can be restored later
+        repo.deleteTrip(id)
+    }
 
     suspend fun me(tripId: Long): MemberEntity? = repo.listMembers(tripId).firstOrNull { it.isMe }
         ?: repo.listMembers(tripId).firstOrNull()
