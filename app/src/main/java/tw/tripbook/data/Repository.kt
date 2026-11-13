@@ -299,15 +299,29 @@ class Repository(private val db: AppDatabase) {
     // ---- 我要買 ----
     fun observeShopping(tripId: Long) = shopping.observeForTrip(tripId)
 
-    suspend fun addShoppingItem(tripId: Long, name: String, qty: Int, note: String): Long =
-        shopping.insert(ShoppingItemEntity(tripId = tripId, name = name.trim(), qty = qty.coerceAtLeast(1), note = note.trim()))
+    suspend fun addShoppingItem(tripId: Long, name: String, qty: Int, note: String, photoPath: String? = null): Long =
+        shopping.insert(
+            ShoppingItemEntity(
+                tripId = tripId, name = ShoppingText.itemName(name, photoPath != null),
+                qty = qty.coerceAtLeast(1), note = note.trim(), photoPath = photoPath
+            )
+        )
 
-    suspend fun updateShoppingItem(id: Long, name: String, qty: Int, note: String) {
+    suspend fun updateShoppingItem(id: Long, name: String, qty: Int, note: String, photoPath: String?) {
         val it = shopping.get(id) ?: return
-        shopping.update(it.copy(name = name.trim(), qty = qty.coerceAtLeast(1), note = note.trim()))
+        if (it.photoPath != null && it.photoPath != photoPath) runCatching { java.io.File(it.photoPath).delete() }
+        shopping.update(
+            it.copy(
+                name = ShoppingText.itemName(name, photoPath != null),
+                qty = qty.coerceAtLeast(1), note = note.trim(), photoPath = photoPath
+            )
+        )
     }
 
-    suspend fun deleteShoppingItem(id: Long) = shopping.delete(id)
+    suspend fun deleteShoppingItem(id: Long) {
+        shopping.get(id)?.photoPath?.let { p -> runCatching { java.io.File(p).delete() } }
+        shopping.delete(id)
+    }
 
     /** Bought: records a personal expense for 本人 (cash deducts remaining cash; card does not). */
     suspend fun markBought(itemId: Long, amountCents: Long, method: PaymentMethod): Long? {

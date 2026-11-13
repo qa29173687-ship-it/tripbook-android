@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, MemberEntity::class, ExpenseEntity::class,
         ExpenseSplitEntity::class, CashMovementEntity::class, ShoppingItemEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,12 +37,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds a photo to 我要買 items; keeps all data. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `shopping_items` ADD COLUMN `photoPath` TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: AppDatabase? = null
         fun get(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext, AppDatabase::class.java, "tripbook.db"
-                ).addMigrations(MIGRATION_2_3).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
     }
 }

@@ -210,5 +210,8 @@ class LogicTest {
         assertEquals("白色戀人 ×3", ShoppingText.expenseTitle(" 白色戀人 ", 3))
         assertEquals("抹茶粉", ShoppingText.expenseTitle("抹茶粉", 1))
         assertEquals("購物", ShoppingText.expenseTitle("  ", 1))
+        assertEquals("照片裡的東西", ShoppingText.itemName(" ", true))
+        assertEquals("要買的東西", ShoppingText.itemName("", false))
+        assertEquals("EVE", ShoppingText.itemName(" EVE ", true))
     }
 }

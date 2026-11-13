@@ -91,10 +91,10 @@ class TripViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun shopping(tripId: Long) = repo.observeShopping(tripId)
-    fun addShoppingItem(tripId: Long, name: String, qty: Int, note: String) =
-        viewModelScope.launch { repo.addShoppingItem(tripId, name, qty, note) }
-    fun updateShoppingItem(id: Long, name: String, qty: Int, note: String) =
-        viewModelScope.launch { repo.updateShoppingItem(id, name, qty, note) }
+    fun addShoppingItem(tripId: Long, name: String, qty: Int, note: String, photoPath: String? = null) =
+        viewModelScope.launch { repo.addShoppingItem(tripId, name, qty, note, photoPath) }
+    fun updateShoppingItem(id: Long, name: String, qty: Int, note: String, photoPath: String?) =
+        viewModelScope.launch { repo.updateShoppingItem(id, name, qty, note, photoPath) }
     fun deleteShoppingItem(id: Long) = viewModelScope.launch { repo.deleteShoppingItem(id) }
     fun markBought(itemId: Long, amount: Long, method: PaymentMethod, onDone: () -> Unit = {}) =
         viewModelScope.launch { repo.markBought(itemId, amount, method); onDone() }

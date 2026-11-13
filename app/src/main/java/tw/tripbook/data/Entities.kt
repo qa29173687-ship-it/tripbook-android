@@ -116,5 +116,6 @@ data class ShoppingItemEntity(
     val note: String = "",
     val done: Boolean = false,
     val expenseId: Long? = null,
+    val photoPath: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
