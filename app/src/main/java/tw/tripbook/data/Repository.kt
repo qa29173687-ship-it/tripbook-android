@@ -20,6 +20,8 @@ class Repository(private val db: AppDatabase) {
     suspend fun getTrip(id: Long) = trips.get(id)
     suspend fun listMembers(tripId: Long) = members.listForTrip(tripId)
     suspend fun listExpenses(tripId: Long) = expenses.listForTrip(tripId)
+    suspend fun splitsForTrip(tripId: Long) = expenses.splitsForTrip(tripId)
+    suspend fun listShopping(tripId: Long) = shopping.listForTrip(tripId)
 
     suspend fun createTrip(
         name: String, place: String, currency: String,
@@ -319,6 +321,12 @@ class Repository(private val db: AppDatabase) {
     }
 
     suspend fun deleteShoppingItem(id: Long) {
+        shopping.get(id)?.photoPath?.let { p -> runCatching { java.io.File(p).delete() } }
+        shopping.delete(id)
+    }
+
+    /** Removes a local 我要買 row (after moving it to the shared list) but keeps its expense. */
+    suspend fun deleteShoppingItemKeepExpense(id: Long) {
         shopping.get(id)?.photoPath?.let { p -> runCatching { java.io.File(p).delete() } }
         shopping.delete(id)
     }

@@ -86,12 +86,25 @@ fun AppNav(vm: TripViewModel) {
                     vm = vm,
                     onOpenTrip = { nav.navigate("trip/$it") },
                     onCreateTrip = { nav.navigate("editTrip") },
+                    onJoin = { nav.navigate("join") },
+                    onOpenShared = { nav.navigate("shared/$it") },
                     onCash = { tripId, memberId -> nav.navigate("cash/$tripId/${memberId ?: -1}") }
                 )
             }
             composable(Tab.Records.route) { RecordsScreen(vm) { nav.navigate("trip/$it") } }
             composable(Tab.Settle.route) { SettlePickScreen(vm) { nav.navigate("settle/$it") } }
-            composable(Tab.Settings.route) { SettingsScreen(vm) }
+            composable(Tab.Settings.route) { SettingsScreen(vm, onOpenTrip = { nav.navigate("trip/$it") }) }
+            composable("share/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                ShareScreen(vm, e.arguments!!.getLong("id"), onBack = { nav.popBackStack() })
+            }
+            composable("join") {
+                JoinScreen(vm, onBack = { nav.popBackStack() }, onJoined = { cid ->
+                    nav.navigate("shared/$cid") { popUpTo(Tab.Trips.route) }
+                })
+            }
+            composable("shared/{cid}", arguments = listOf(navArgument("cid") { type = NavType.StringType })) { e ->
+                SharedTripScreen(vm, e.arguments!!.getString("cid")!!, onBack = { nav.popBackStack() })
+            }
             composable("editTrip") {
                 EditTripScreen(
                     vm,
@@ -118,6 +131,7 @@ fun AppNav(vm: TripViewModel) {
                     onBack = { nav.popBackStack() },
                     onAddExpense = { nav.navigate("addExpense/$id") },
                     onSettle = { nav.navigate("settle/$id") },
+                    onShare = { nav.navigate("share/$id") },
                     onMembers = { nav.navigate("members/$id") },
                     onEditTrip = { nav.navigate("editTrip/$id") },
                     onExpense = { eid -> nav.navigate("expense/$id/$eid") },

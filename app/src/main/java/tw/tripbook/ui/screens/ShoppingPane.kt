@@ -210,7 +210,7 @@ private fun PhotoViewer(path: String, onClose: () -> Unit) {
 
 /** Camera / gallery button. Shows the chosen photo; tap it again to change or remove. */
 @Composable
-private fun PhotoPicker(path: String?, onPicked: (String) -> Unit, onRemove: (String) -> Unit, size: Int) {
+internal fun PhotoPicker(path: String?, onPicked: (String) -> Unit, onRemove: (String) -> Unit, size: Int) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }

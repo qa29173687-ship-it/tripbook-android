@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function tripData(t) { return get(/databases/$(database)/documents/trips/$(t)).data; }
+    function isOwner(t) { return signed() && tripData(t).ownerUid == request.auth.uid; }
+    function isMember(t) {
+      return signed() && (isOwner(t) ||
+        exists(/databases/$(database)/documents/trips/$(t)/joins/$(request.auth.uid)));
+    }
+
+    match /invites/{code} {
+      allow get: if signed();
+      allow list: if signed() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signed() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /trips/{t} {
+      allow get: if signed();
+      allow list: if signed() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signed() && resource.data.ownerUid == request.auth.uid;
+
+      match /joins/{uid} {
+        allow read: if isMember(t);
+        allow create, update: if signed() && uid == request.auth.uid
+          && request.resource.data.code == tripData(t).inviteCode;
+        allow delete: if isOwner(t) || (signed() && uid == request.auth.uid);
+      }
+      match /expenses/{e} {
+        allow read: if isMember(t);
+        allow write: if isOwner(t);
+      }
+      match /shopping/{i} {
+        allow read: if isMember(t);
+        allow create: if isMember(t) && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if isMember(t) && (resource.data.ownerUid == request.auth.uid || isOwner(t)
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpers', 'updatedAt']));
+        allow delete: if isMember(t) && (resource.data.ownerUid == request.auth.uid || isOwner(t));
+      }
+      match /inbox/{x} {
+        allow read: if isMember(t);
+        allow create: if isMember(t) && request.resource.data.byUid == request.auth.uid;
+        allow delete: if isOwner(t) || (signed() && resource.data.byUid == request.auth.uid);
+      }
+    }
+  }
+}

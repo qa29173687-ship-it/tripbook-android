@@ -12,3 +12,4 @@ keystore.properties
 *.apk
 *.apk.idsig
 TripBook-*.apk
+app/google-services.json

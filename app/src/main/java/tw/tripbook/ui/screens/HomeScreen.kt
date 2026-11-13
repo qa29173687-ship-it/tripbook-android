@@ -31,8 +31,11 @@ fun HomeScreen(
     vm: TripViewModel,
     onOpenTrip: (Long) -> Unit,
     onCreateTrip: () -> Unit,
-    onCash: (Long, Long?) -> Unit
+    onCash: (Long, Long?) -> Unit,
+    onJoin: () -> Unit = {},
+    onOpenShared: (String) -> Unit = {}
 ) {
+    val joined by vm.joined.collectAsStateWithLifecycle()
     val trips by vm.trips.collectAsStateWithLifecycle()
     val active = trips.count { !it.settled }
     val monthSpend = remember(trips) { mutableStateOf(0L) }
@@ -132,6 +135,28 @@ fun HomeScreen(
             }
             item {
                 Spacer(Modifier.height(18.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("旅伴分享給我的", color = InkSoft, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onJoin) { Text("＋ 輸入邀請碼加入", color = MintDeep, fontWeight = FontWeight.Bold) }
+                }
+            }
+            items(joined, key = { "j_" + it.cloudId }) { j ->
+                SoftCard(Modifier.padding(bottom = 12.dp).clickable { onOpenShared(j.cloudId) }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MintSoft),
+                            contentAlignment = Alignment.Center
+                        ) { Text("🤝", fontSize = 26.sp) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(j.tripName, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                            Text("我是${j.memberName} · 寫我要買、看我的花費", color = InkSoft, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+            item {
+                Spacer(Modifier.height(6.dp))
                 Text("我的行程", color = InkSoft, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(Modifier.height(10.dp))
             }

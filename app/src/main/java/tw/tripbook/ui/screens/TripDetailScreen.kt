@@ -45,8 +45,12 @@ fun TripDetailScreen(
     onMembers: () -> Unit,
     onEditTrip: () -> Unit,
     onExpense: (Long) -> Unit,
-    onPerson: (Long) -> Unit
+    onPerson: (Long) -> Unit,
+    onShare: () -> Unit = {}
 ) {
+    val cloudId = remember(tripId) { vm.cloudIdFor(tripId) }
+    val notices by vm.ownerSync.notices.collectAsStateWithLifecycle()
+    val notice = notices[tripId]
     val trip by vm.trip(tripId).collectAsStateWithLifecycle(null)
     val mems by vm.members(tripId).collectAsStateWithLifecycle(emptyList())
     val exps by vm.expenses(tripId).collectAsStateWithLifecycle(emptyList())
@@ -91,6 +95,7 @@ fun TripDetailScreen(
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                 actions = {
+                    TextButton(onClick = onShare) { Text(if (cloudId != null) "👑 共享中" else "共享", color = MintDeep, fontWeight = FontWeight.Bold) }
                     IconButton(onClick = onEditTrip) { Icon(Icons.Default.Edit, contentDescription = "編輯行程", tint = MintDeep) }
                     TextButton(onClick = onMembers) { Text("旅伴", color = MintDeep, fontWeight = FontWeight.Bold) }
                 },
@@ -108,7 +113,28 @@ fun TripDetailScreen(
     ) { pad ->
       Column(Modifier.fillMaxSize().padding(pad)) {
         TripTabs(tab, onSelect = { i -> if (i == 2) onSettle() else tab = i })
-        if (tab == 1) {
+        notice?.let { n ->
+            Text(
+                "🔔 $n（點一下關閉）",
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(MintSoft)
+                    .clickable { vm.ownerSync.clearNotice(tripId) }.padding(12.dp),
+                color = MintDeep, fontSize = 13.sp, fontWeight = FontWeight.Bold
+            )
+        }
+        if (tab == 1 && cloudId != null && me != null) {
+            val scopeBuy = rememberCoroutineScope()
+            SharedShoppingPane(
+                cloudId = cloudId,
+                myMemberId = vm.ownerSync.cloudMemberId(tripId, me.id),
+                myName = me.name,
+                members = mems.map { tw.tripbook.domain.CMember(vm.ownerSync.cloudMemberId(tripId, it.id), it.name, it.startingCashCents, it.cashCents, it.isMe) },
+                myCash = me.cashCents, myStartCash = me.startingCashCents, currency = currency,
+                onBuy = { item, amount, method -> vm.ownerSync.ownerBuy(tripId, cloudId, item, amount, method) },
+                onUnbuy = { item -> vm.ownerSync.ownerUnbuy(cloudId, item) },
+                modifier = Modifier.weight(1f)
+            )
+        } else if (tab == 1) {
             ShoppingPane(vm, tripId, me, exps, currency, Modifier.weight(1f))
         } else
         LazyColumn(

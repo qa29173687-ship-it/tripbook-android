@@ -214,4 +214,29 @@ class LogicTest {
         assertEquals("要買的東西", ShoppingText.itemName("", false))
         assertEquals("EVE", ShoppingText.itemName(" EVE ", true))
     }
+
+    @Test
+    fun sharedSummaryForCompanion() {
+        val ms = listOf(
+            CMember("1", "宏威", 50000, 47000, true),
+            CMember("2", "小美", 30000, 28400, false),
+            CMember("3", "阿明", 30000, 27500, false)
+        )
+        val es = listOf(
+            CExpense("a", "EVE ×2", 1600, "2", "CASH", 3, mapOf("2" to 1600L)),
+            CExpense("b", "一蘭拉麵", 3600, "1", "CASH", 2, mapOf("1" to 1200L, "2" to 1200L, "3" to 1200L)),
+            CExpense("c", "Skyliner", 7500, "3", "CASH", 1, mapOf("1" to 2500L, "2" to 2500L, "3" to 2500L))
+        )
+        val pend = listOf(CPending("2", "抹茶粉", 500, "CASH", 4), CPending("3", "x", 100, "CASH", 5))
+        val s = SharedView.summary("2", ms, es, pend)
+        assertEquals(27900, s.remainingCash)
+        assertEquals(1600 + 1200 + 2500 + 500L, s.spent)
+        assertEquals(3, s.related.size)
+        assertEquals(1, s.pending.size)
+        val owed = s.transfers.filter { it.fromId == "2" }.sumOf { it.amountCents }
+        assertEquals(3700L, owed)
+        assertEquals("ABCD-EF", SharedView.displayCode("ABCDEF"))
+        assertEquals("ABCDEF", SharedView.normalizeCode("abcd-ef "))
+        assertEquals(6, SharedView.newInviteCode().length)
+    }
 }

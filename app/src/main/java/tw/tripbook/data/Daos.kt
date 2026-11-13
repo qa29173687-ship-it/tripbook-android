@@ -91,6 +91,9 @@ interface ShoppingDao {
     @Query("SELECT * FROM shopping_items WHERE tripId = :tripId ORDER BY done ASC, createdAt ASC, id ASC")
     fun observeForTrip(tripId: Long): Flow<List<ShoppingItemEntity>>
 
+    @Query("SELECT * FROM shopping_items WHERE tripId = :tripId ORDER BY createdAt")
+    suspend fun listForTrip(tripId: Long): List<ShoppingItemEntity>
+
     @Query("SELECT * FROM shopping_items WHERE id = :id")
     suspend fun get(id: Long): ShoppingItemEntity?
 

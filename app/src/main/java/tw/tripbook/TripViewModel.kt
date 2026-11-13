@@ -10,12 +10,20 @@ import tw.tripbook.domain.*
 
 class TripViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = Repository(AppDatabase.get(app))
+    val shareStore = tw.tripbook.cloud.ShareStore(app)
+    val ownerSync = tw.tripbook.cloud.OwnerSync(repo, shareStore, viewModelScope)
+    val joined = MutableStateFlow(shareStore.joined())
+
+    fun cloudIdFor(tripId: Long) = shareStore.ownedCloudId(tripId)
+    suspend fun share(tripId: Long): String = ownerSync.share(tripId)
+    fun refreshJoined() { joined.value = shareStore.joined() }
 
     val trips: StateFlow<List<TripEntity>> =
         repo.observeTrips().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch { repo.seedDemoIfEmpty() }
+        runCatching { ownerSync.startAll() }
     }
 
     fun members(tripId: Long) = repo.observeMembers(tripId)
