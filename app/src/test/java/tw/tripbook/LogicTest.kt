@@ -369,4 +369,20 @@ class LogicTest {
         assertEquals(800L, s2.spent)
         assertTrue(SharedView.transfers(ms, SharedView.resolve(listOf(e), emptyList(), repaid).expenses).isEmpty())
     }
+
+
+    @Test
+    fun inviteShareTextIncludesJoinLink() {
+        val t = SharedView.inviteShareText("東京三日遊", "abcdef")
+        assertEquals("https://qa29173687-ship-it.github.io/tripbook-web/#/join/ABCDEF", SharedView.joinUrl("abcd-ef"))
+        assertTrue(t.contains("https://qa29173687-ship-it.github.io/tripbook-web/#/join/ABCDEF"))
+        assertTrue(t.contains("邀請碼 ABCD-EF"))
+        assertTrue(t.contains("一起用旅伴帳記「東京三日遊」！"))
+        assertTrue(t.contains("點這裡加入："))
+        assertTrue(t.contains("iPhone 建議用 Safari 開"))
+        assertTrue(t.contains("Android 也可以用旅伴帳 App 輸入邀請碼"))
+        val plain = SharedView.inviteShareText("", "8K3QTR")
+        assertTrue(plain.startsWith("一起用旅伴帳記帳！"))
+        assertTrue(plain.contains("#/join/8K3QTR"))
+    }
 }

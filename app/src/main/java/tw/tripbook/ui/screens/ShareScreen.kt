@@ -41,7 +41,7 @@ fun ShareScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
     val cTrip by remember(cloudId) { cloudId?.let { Cloud.tripFlow(it) } ?: flowOf(null) }.collectAsStateWithLifecycle(null)
     val joins by remember(cloudId) { cloudId?.let { Cloud.joinsFlow(it) } ?: flowOf(emptyList()) }.collectAsStateWithLifecycle(emptyList())
     val code = cTrip?.inviteCode.orEmpty()
-    val shareText = "一起用旅伴帳記「${trip?.name.orEmpty()}」！打開旅伴帳 → 加入旅伴的旅程 → 輸入邀請碼 ${SharedView.displayCode(code)}"
+    val shareText = SharedView.inviteShareText(trip?.name.orEmpty(), code)
 
     Scaffold(
         containerColor = Cream,
@@ -99,9 +99,13 @@ fun ShareScreen(vm: TripViewModel, tripId: Long, onBack: () -> Unit) {
                         if (code.isEmpty()) "讀取中…" else SharedView.displayCode(code),
                         fontSize = 40.sp, fontWeight = FontWeight.Black, color = MintDeep, letterSpacing = 4.sp
                     )
+                    if (code.isNotEmpty()) Text(
+                        SharedView.joinUrl(code),
+                        color = InkSoft, fontSize = 13.sp
+                    )
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { clip.setText(AnnotatedString(SharedView.displayCode(code))) }) { Text("複製邀請碼") }
+                        OutlinedButton(onClick = { clip.setText(AnnotatedString(shareText)) }) { Text("複製邀請") }
                         Button(
                             onClick = {
                                 ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {

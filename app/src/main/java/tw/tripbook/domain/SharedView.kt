@@ -123,4 +123,13 @@ object SharedView {
         (1..6).map { CODE_CHARS[rnd.nextInt(CODE_CHARS.length)] }.joinToString("")
     fun displayCode(code: String) = if (code.length == 6) code.substring(0, 4) + "-" + code.substring(4) else code
     fun normalizeCode(input: String) = input.uppercase().filter { it.isLetterOrDigit() }
+
+    const val WEB_JOIN_BASE = "https://qa29173687-ship-it.github.io/tripbook-web/"
+    fun joinUrl(code: String): String = "${WEB_JOIN_BASE}#/join/${normalizeCode(code)}"
+    fun inviteShareText(tripName: String, code: String): String {
+        val raw = normalizeCode(code)
+        val shown = displayCode(raw)
+        val lead = if (tripName.isNotBlank()) "一起用旅伴帳記「$tripName」！" else "一起用旅伴帳記帳！"
+        return "${lead}點這裡加入：${joinUrl(raw)}（邀請碼 $shown）。iPhone 建議用 Safari 開，先按分享→加入主畫面，再從主畫面圖示打開。Android 也可以用旅伴帳 App 輸入邀請碼。"
+    }
 }
