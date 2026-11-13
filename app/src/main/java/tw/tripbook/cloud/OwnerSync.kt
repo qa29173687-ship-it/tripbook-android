@@ -128,19 +128,25 @@ class OwnerSync(private val repo: Repository, private val store: ShareStore, pri
         val item = runCatching { Cloud.parseItem(itemRef.get().await()) }.getOrNull()
         val oldExp = item?.expenseId?.toLongOrNull()
         val memberId = localMemberId(localId, m.memberId)
-        if (m.type == "buy" && memberId != null && repo.listMembers(localId).any { it.id == memberId }) {
+        val forId = localMemberId(localId, m.forMemberId) ?: memberId
+        val mems = repo.listMembers(localId)
+        if (m.type == "buy" && memberId != null && forId != null && mems.any { it.id == memberId } && mems.any { it.id == forId }) {
             oldExp?.let { repo.deleteExpense(it) }
             val method = runCatching { PaymentMethod.valueOf(m.method) }.getOrDefault(PaymentMethod.CASH)
-            val eid = repo.addExpense(localId, m.title, m.amountCents, ExpenseCategory.SHOP, memberId, method, listOf(memberId))
-            if (item != null) itemRef.update("expenseId", eid.toString()).await()
+            val eid = repo.addExpense(localId, m.title, m.amountCents, ExpenseCategory.SHOP, memberId, method, listOf(forId))
+            if (item != null) itemRef.update(
+                mapOf("expenseId" to eid.toString(), "done" to true, "amount" to m.amountCents, "method" to m.method)
+            ).await()
             val cur = repo.getTrip(localId)?.currency ?: "TWD"
+            val forName = mems.firstOrNull { it.id == forId }?.name.orEmpty()
+            val who = if (forId == memberId) "${m.memberName} 剛買到" else "${m.memberName} 幫 $forName 買到"
             notices.update {
-                it + (localId to "${m.memberName} 剛買到 ${m.title} ${Money.format(m.amountCents, cur)}" +
+                it + (localId to "$who ${m.title} ${Money.format(m.amountCents, cur)}" +
                     "${if (method == PaymentMethod.CASH) " 現金" else " 信用卡"}，已記帳")
             }
         } else if (m.type == "unbuy") {
             oldExp?.let { repo.deleteExpense(it) }
-            if (item != null) itemRef.update("expenseId", null).await()
+            if (item != null) itemRef.update(mapOf("expenseId" to null, "done" to false, "amount" to 0L)).await()
         }
         Cloud.trip(cloudId).collection("inbox").document(m.id).delete().await()
     }

@@ -9,7 +9,8 @@ data class CExpense(
 )
 
 /** A companion purchase not yet recorded by the owner's phone. */
-data class CPending(val memberId: String, val title: String, val amountCents: Long, val method: String, val at: Long)
+/** memberId = who paid; forId = whose item / whose share. */
+data class CPending(val memberId: String, val title: String, val amountCents: Long, val method: String, val at: Long, val forId: String = memberId)
 
 data class CTransfer(val fromId: String, val toId: String, val amountCents: Long)
 
@@ -25,9 +26,9 @@ data class MySummary(
 object SharedView {
     fun summary(meId: String, members: List<CMember>, expenses: List<CExpense>, pending: List<CPending>): MySummary {
         val me = members.firstOrNull { it.id == meId }
-        val myPending = pending.filter { it.memberId == meId }
-        val pendingCash = myPending.filter { it.method == "CASH" }.sumOf { it.amountCents }
-        val spent = expenses.sumOf { it.shares[meId] ?: 0L } + myPending.sumOf { it.amountCents }
+        val myPending = pending.filter { it.memberId == meId || it.forId == meId }
+        val pendingCash = pending.filter { it.memberId == meId && it.method == "CASH" }.sumOf { it.amountCents }
+        val spent = expenses.sumOf { it.shares[meId] ?: 0L } + pending.filter { it.forId == meId }.sumOf { it.amountCents }
         return MySummary(
             remainingCash = (me?.cashCents ?: 0L) - pendingCash,
             startCash = me?.startCents ?: 0L,

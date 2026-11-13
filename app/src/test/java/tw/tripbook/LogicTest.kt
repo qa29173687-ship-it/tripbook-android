@@ -239,4 +239,23 @@ class LogicTest {
         assertEquals("ABCDEF", SharedView.normalizeCode("abcd-ef "))
         assertEquals(6, SharedView.newInviteCode().length)
     }
+
+    @org.junit.Test
+    fun pendingPaidForOthers() {
+        val ms = listOf(
+            tw.tripbook.domain.CMember("1", "宏威", 10000, 10000, true),
+            tw.tripbook.domain.CMember("2", "小美", 5000, 5000, false)
+        )
+        val pend = listOf(tw.tripbook.domain.CPending("1", "藥妝", 800, "CASH", 0, forId = "2"))
+        val me = tw.tripbook.domain.SharedView.summary("1", ms, emptyList(), pend)
+        org.junit.Assert.assertEquals(9200, me.remainingCash)
+        org.junit.Assert.assertEquals(0, me.spent)
+        val her = tw.tripbook.domain.SharedView.summary("2", ms, emptyList(), pend)
+        org.junit.Assert.assertEquals(5000, her.remainingCash)
+        org.junit.Assert.assertEquals(800, her.spent)
+        // once recorded: payer 1, share 2 -> 2 owes 1
+        val e = tw.tripbook.domain.CExpense("9", "藥妝", 800, "1", "CASH", 0, mapOf("2" to 800L))
+        val t = tw.tripbook.domain.SharedView.transfers(ms, listOf(e))
+        org.junit.Assert.assertEquals(listOf(tw.tripbook.domain.CTransfer("2", "1", 800)), t)
+    }
 }

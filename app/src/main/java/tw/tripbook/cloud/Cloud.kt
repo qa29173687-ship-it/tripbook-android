@@ -33,20 +33,24 @@ data class CTrip(
     val inviteCode: String, val startDate: String, val endDate: String, val members: List<CMember>
 )
 
-data class CHelper(val name: String, val status: String) // FIND = 我幫你找, SEEN = 我看到了
+data class CHelper(val name: String, val status: String, val amountCents: Long = 0, val method: String = "CASH") // FIND 我幫你找, SEEN 我看到了, PAID 我幫你買了
 
 data class CItem(
     val id: String, val ownerUid: String, val memberId: String, val memberName: String,
     val name: String, val qty: Int, val note: String, val photo: String?,
     val done: Boolean, val amountCents: Long, val method: String, val expenseId: String?,
     val helpers: Map<String, CHelper>, val createdAt: Long
-)
+) {
+    val paidBy: CHelper? get() = helpers.values.firstOrNull { it.status == "PAID" }
+    val bought: Boolean get() = done || paidBy != null
+}
 
 data class CJoin(val uid: String, val memberId: String, val name: String)
 
 data class CInbox(
     val id: String, val byUid: String, val memberId: String, val memberName: String, val itemId: String,
-    val type: String, val title: String, val amountCents: Long, val method: String, val at: Long
+    val type: String, val title: String, val amountCents: Long, val method: String, val at: Long,
+    val forMemberId: String = memberId
 )
 
 /** Thin wrapper over Firebase Auth + Firestore for 旅伴共享. */
@@ -113,7 +117,12 @@ object Cloud {
     fun parseItem(d: DocumentSnapshot): CItem {
         @Suppress("UNCHECKED_CAST")
         val hs = (d.get("helpers") as? Map<String, Map<String, Any?>>).orEmpty()
-            .mapValues { CHelper(it.value["name"]?.toString().orEmpty(), it.value["status"]?.toString() ?: "FIND") }
+            .mapValues {
+                CHelper(
+                    it.value["name"]?.toString().orEmpty(), it.value["status"]?.toString() ?: "FIND",
+                    (it.value["amount"] as? Number)?.toLong() ?: 0L, it.value["method"]?.toString() ?: "CASH"
+                )
+            }
         return CItem(
             d.id, d.getString("ownerUid").orEmpty(), d.getString("memberId").orEmpty(), d.getString("memberName").orEmpty(),
             d.getString("name").orEmpty(), (d.getLong("qty") ?: 1).toInt(), d.getString("note").orEmpty(),
@@ -126,11 +135,12 @@ object Cloud {
     fun parseInbox(d: DocumentSnapshot) = CInbox(
         d.id, d.getString("byUid").orEmpty(), d.getString("memberId").orEmpty(), d.getString("memberName").orEmpty(),
         d.getString("itemId").orEmpty(), d.getString("type") ?: "buy", d.getString("title").orEmpty(),
-        d.getLong("amount") ?: 0, d.getString("method") ?: "CASH", d.getLong("at") ?: 0
+        d.getLong("amount") ?: 0, d.getString("method") ?: "CASH", d.getLong("at") ?: 0,
+        d.getString("forMemberId") ?: d.getString("memberId").orEmpty()
     )
 
     fun pendingOf(list: List<CInbox>) = list.filter { it.type == "buy" }
-        .map { CPending(it.memberId, it.title, it.amountCents, it.method, it.at) }
+        .map { CPending(it.memberId, it.title, it.amountCents, it.method, it.at, it.forMemberId) }
 
     // ---------- live flows ----------
     fun tripFlow(id: String): Flow<CTrip?> = callbackFlow {
@@ -200,6 +210,38 @@ object Cloud {
             mapOf(
                 "byUid" to user!!.uid, "memberId" to item.memberId, "memberName" to memberName, "itemId" to item.id,
                 "type" to "unbuy", "title" to item.name, "amount" to 0L, "method" to item.method, "at" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    /** Someone pays for another member's item: payer = me, the cost is that member's share. */
+    suspend fun helperBuy(tripId: String, item: CItem, myMemberId: String, myName: String, title: String, amount: Long, method: String) {
+        val uid = user!!.uid
+        trip(tripId).collection("shopping").document(item.id).update(
+            mapOf(
+                "helpers.$uid" to mapOf("name" to myName, "status" to "PAID", "amount" to amount, "method" to method, "memberId" to myMemberId),
+                "updatedAt" to System.currentTimeMillis()
+            )
+        ).await()
+        trip(tripId).collection("inbox").add(
+            mapOf(
+                "byUid" to uid, "memberId" to myMemberId, "memberName" to myName, "forMemberId" to item.memberId,
+                "itemId" to item.id, "type" to "buy", "title" to title, "amount" to amount, "method" to method,
+                "at" to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    suspend fun helperUnbuy(tripId: String, item: CItem, myMemberId: String, myName: String) {
+        val uid = user!!.uid
+        trip(tripId).collection("shopping").document(item.id).update(
+            mapOf("helpers.$uid" to FieldValue.delete(), "updatedAt" to System.currentTimeMillis())
+        ).await()
+        trip(tripId).collection("inbox").add(
+            mapOf(
+                "byUid" to uid, "memberId" to myMemberId, "memberName" to myName, "forMemberId" to item.memberId,
+                "itemId" to item.id, "type" to "unbuy", "title" to item.name, "amount" to 0L, "method" to "CASH",
+                "at" to System.currentTimeMillis()
             )
         ).await()
     }

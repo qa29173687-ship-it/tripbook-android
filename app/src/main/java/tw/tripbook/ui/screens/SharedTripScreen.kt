@@ -114,7 +114,7 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                     if (pend.isNotEmpty()) item { Text("等${ownerName}的手機記帳", color = PeachDeep, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                     items(pend) { p ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PeachSoft).padding(14.dp)) {
-                            Text("${nameOf(p.memberId)} · ${p.title}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                            Text(if (p.forId != p.memberId) "${nameOf(p.memberId)} 幫 ${nameOf(p.forId)} · ${p.title}" else "${nameOf(p.memberId)} · ${p.title}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                             Text(Money.format(p.amountCents, currency), fontWeight = FontWeight.Black)
                         }
                     }
@@ -161,7 +161,13 @@ fun SharedTripScreen(vm: TripViewModel, cloudId: String, onBack: () -> Unit) {
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PeachSoft).padding(14.dp)) {
                             Column(Modifier.weight(1f)) {
                                 Text(p.title, fontWeight = FontWeight.Bold)
-                                Text("我付 · ${if (p.method == "CASH") "現金" else "信用卡"} · 只算我", color = InkSoft, fontSize = 12.sp)
+                                Text(
+                                    when {
+                                        p.memberId == j.memberId && p.forId == j.memberId -> "我付 · ${if (p.method == "CASH") "現金" else "信用卡"} · 只算我"
+                                        p.memberId == j.memberId -> "我幫${nameOf(p.forId)}付 · ${if (p.method == "CASH") "現金" else "信用卡"} · 算他的"
+                                        else -> "${nameOf(p.memberId)} 幫我付 · 算我的，要還他"
+                                    }, color = InkSoft, fontSize = 12.sp
+                                )
                             }
                             Text(Money.format(p.amountCents, currency), fontWeight = FontWeight.Black)
                         }

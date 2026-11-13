@@ -66,6 +66,8 @@ fun SharedShoppingPane(
     var newName by remember { mutableStateOf("") }
     var pendingPhoto by remember { mutableStateOf<String?>(null) }
     var buying by remember { mutableStateOf<CItem?>(null) }
+    var helperBuying by remember { mutableStateOf<CItem?>(null) }
+    var helperUntick by remember { mutableStateOf<CItem?>(null) }
     var unticking by remember { mutableStateOf<CItem?>(null) }
     var editing by remember { mutableStateOf<CItem?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
@@ -138,7 +140,8 @@ fun SharedShoppingPane(
                         onCheck = { if (own && !busy) { if (it.done) unticking = it else buying = it } },
                         onEdit = { if (own) editing = it },
                         onPhoto = { p -> viewing = p },
-                        onHelp = { status -> run { Cloud.setHelp(cloudId, it.id, myName, status) } }
+                        onHelp = { status -> run { Cloud.setHelp(cloudId, it.id, myName, status) } },
+                        onPayFor = { if (!busy) { if (uid != null && it.helpers[uid]?.status == "PAID") helperUntick = it else helperBuying = it } }
                     )
                 }
             }
@@ -176,6 +179,36 @@ fun SharedShoppingPane(
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MintDeep)
             ) { Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White) }
         }
+    }
+
+    helperBuying?.let { item ->
+
+        CloudBoughtDialog(item, myCash, currency, onDismiss = { helperBuying = null }, forName = item.memberName) { amount, method ->
+
+            helperBuying = null
+
+            run { Cloud.helperBuy(cloudId, item, myMemberId, myName, ShoppingText.expenseTitle(item.name, item.qty), amount, method.name) }
+
+        }
+
+    }
+
+    helperUntick?.let { item ->
+
+        AlertDialog(
+
+            onDismissRequest = { helperUntick = null },
+
+            title = { Text("取消幫買？") },
+
+            text = { Text("會刪掉這筆幫${item.memberName}代墊的支出。") },
+
+            confirmButton = { TextButton(onClick = { helperUntick = null; run { Cloud.helperUnbuy(cloudId, item, myMemberId, myName) } }) { Text("取消幫買", color = PeachDeep) } },
+
+            dismissButton = { TextButton(onClick = { helperUntick = null }) { Text("保留") } }
+
+        )
+
     }
 
     buying?.let { item ->
@@ -241,18 +274,19 @@ private fun B64Viewer(b64: String, onClose: () -> Unit) {
 @Composable
 private fun CloudRow(
     item: CItem, own: Boolean, myUid: String?, currency: String,
-    onCheck: () -> Unit, onEdit: () -> Unit, onPhoto: (String) -> Unit, onHelp: (String?) -> Unit
+    onCheck: () -> Unit, onEdit: () -> Unit, onPhoto: (String) -> Unit, onHelp: (String?) -> Unit,
+    onPayFor: () -> Unit = {}
 ) {
     SoftCard(Modifier.clickable(onClick = onEdit)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (item.done) MintDeep else Color.White)
-                    .border(2.dp, if (item.done) MintDeep else if (own) Color(0xFFB7C9C4) else Color(0xFFDDE6E3), RoundedCornerShape(10.dp))
-                    .clickable(enabled = own, onClick = onCheck),
+                    .background(if (item.bought) MintDeep else Color.White)
+                    .border(2.dp, if (item.bought) MintDeep else if (own) Color(0xFFB7C9C4) else Color(0xFFDDE6E3), RoundedCornerShape(10.dp))
+                    .clickable(enabled = own && item.paidBy == null, onClick = onCheck),
                 contentAlignment = Alignment.Center
             ) {
-                if (item.done) Icon(Icons.Default.Check, contentDescription = "已買", tint = Color.White, modifier = Modifier.size(20.dp))
+                if (item.bought) Icon(Icons.Default.Check, contentDescription = "已買", tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(12.dp))
             item.photo?.let { p ->
@@ -263,26 +297,37 @@ private fun CloudRow(
                 Text(
                     if (item.qty > 1) "${item.name} ×${item.qty}" else item.name,
                     fontWeight = FontWeight.Black, fontSize = 16.sp,
-                    color = if (item.done) InkSoft else Ink,
-                    textDecoration = if (item.done) TextDecoration.LineThrough else null
+                    color = if (item.bought) InkSoft else Ink,
+                    textDecoration = if (item.bought) TextDecoration.LineThrough else null
                 )
                 if (!own) Text("${item.memberName} 要的", color = InkSoft, fontSize = 12.sp)
                 if (item.note.isNotBlank()) Text(item.note, color = InkSoft, fontSize = 12.sp)
-                if (item.done && item.amountCents > 0) Text(
+                item.paidBy?.let { pb ->
+                    val by = if (myUid != null && item.helpers[myUid]?.status == "PAID") "我" else pb.name
+                    Text(
+                        "💰 $by 幫${if (own) "你" else item.memberName}買了 ${Money.format(pb.amountCents, currency)}（${if (pb.method == "CASH") "現金" else "信用卡"}）· 分帳自動算",
+                        color = MintDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                if (item.done && item.paidBy == null && item.amountCents > 0) Text(
                     if (item.method == "CASH") "現金 ${Money.format(item.amountCents, currency)}${if (own) " · 已扣剩餘現金" else ""}"
                     else "信用卡 ${Money.format(item.amountCents, currency)}",
                     color = MintDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold
                 )
-                item.helpers.filterKeys { it != myUid }.values.forEach { h ->
+                item.helpers.filterKeys { it != myUid }.values.filter { it.status != "PAID" }.forEach { h ->
                     Text(
                         if (h.status == "SEEN") "👀 ${h.name} 看到了" else "🔍 ${h.name} 在幫找",
                         color = PeachDeep, fontSize = 12.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
-            if (!own && !item.done) {
-                val mine = myUid?.let { item.helpers[it]?.status }
+            val myStatus = myUid?.let { item.helpers[it]?.status }
+            if (!own && myStatus == "PAID") {
+                SmallTag("取消幫買", false, onPayFor)
+            } else if (!own && !item.bought) {
+                val mine = myStatus
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SmallTag("我幫你買", false, onPayFor)
                     SmallTag("我幫你找", mine == "FIND") { onHelp(if (mine == "FIND") null else "FIND") }
                     SmallTag("我看到了", mine == "SEEN") { onHelp(if (mine == "SEEN") null else "SEEN") }
                 }
@@ -304,14 +349,14 @@ private fun SmallTag(text: String, on: Boolean, onClick: () -> Unit) {
 @Composable
 private fun CloudBoughtDialog(
     item: CItem, remaining: Long, currency: String,
-    onDismiss: () -> Unit, onConfirm: (Long, PaymentMethod) -> Unit
+    onDismiss: () -> Unit, forName: String? = null, onConfirm: (Long, PaymentMethod) -> Unit
 ) {
     var amountText by remember { mutableStateOf("") }
     var method by remember { mutableStateOf(PaymentMethod.CASH) }
     val amount = amountText.toLongOrNull() ?: 0L
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("買到了！${if (item.qty > 1) "${item.name} ×${item.qty}" else item.name}", fontWeight = FontWeight.Black) },
+        title = { Text("${if (forName != null) "幫${forName}買到了！" else "買到了！"}${if (item.qty > 1) "${item.name} ×${item.qty}" else item.name}", fontWeight = FontWeight.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item.photo?.let { B64Thumb(it, 96) }
@@ -325,6 +370,7 @@ private fun CloudBoughtDialog(
                     "剩餘現金 ${Money.format(remaining, currency)} → 扣完剩 ${Money.format(remaining - amount, currency)}",
                     color = MintDeep, fontWeight = FontWeight.Bold, fontSize = 14.sp
                 ) else Text("信用卡只記進支出，不扣現金", color = InkSoft, fontSize = 13.sp)
+                if (forName != null) Text("你先付，這筆算在${forName}身上，分帳會自動算他要還你", color = InkSoft, fontSize = 13.sp)
             }
         },
         confirmButton = {
